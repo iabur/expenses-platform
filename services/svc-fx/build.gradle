@@ -12,7 +12,7 @@ dependencies {
 implementation(libs.spring.boot.starter.security)
 implementation(libs.spring.boot.starter.oauth2.resource.server)
 
-  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testImplementation(libs.spring.boot.starter.test)
 }
 
 tasks.named('test') {

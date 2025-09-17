@@ -30,7 +30,7 @@ spring:
     web-application-type: reactive
   security:
     oauth2:
-      resourceserver:
+      resource server:
         jwt:
           jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
 
