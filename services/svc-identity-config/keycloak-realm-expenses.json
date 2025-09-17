@@ -5,7 +5,10 @@
     {
       "username": "alice@example.com",
       "enabled": true,
+      "firstName": "Alice",
+      "lastName": "Johnson",
       "email": "alice@example.com",
+      "emailVerified": true,
       "credentials": [
         {
           "type": "password",
@@ -20,7 +23,10 @@
     {
       "username": "bob@example.com",
       "enabled": true,
+      "firstName": "Bob",
+      "lastName": "Smith",
       "email": "bob@example.com",
+      "emailVerified": true,
       "credentials": [
         {
           "type": "password",
