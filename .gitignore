@@ -2,6 +2,11 @@
 /build/
 /.gradle/
 !gradle/wrapper/gradle-wrapper.jar
+# Recursive build artifacts
+**/build/
+**/.gradle/
+**/out/
+**/target/
 
 # IDEs
 *.iml
