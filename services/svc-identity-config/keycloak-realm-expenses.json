@@ -1,0 +1,64 @@
+{
+  "realm": "expenses",
+  "enabled": true,
+  "users": [
+    {
+      "username": "alice@example.com",
+      "enabled": true,
+      "email": "alice@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-expenses"
+      ]
+    },
+    {
+      "username": "bob@example.com",
+      "enabled": true,
+      "email": "bob@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-expenses"
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "web",
+      "publicClient": true,
+      "redirectUris": [
+        "*"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true
+    },
+    {
+      "clientId": "mobile",
+      "publicClient": true,
+      "redirectUris": [
+        "*"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true
+    },
+    {
+      "clientId": "gateway",
+      "publicClient": false,
+      "secret": "gateway-secret",
+      "redirectUris": [
+        "*"
+      ]
+    }
+  ]
+}

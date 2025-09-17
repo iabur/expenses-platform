@@ -1,0 +1,35 @@
+# Java / Gradle
+/build/
+/.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDEs
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+*.pid
+*.seed
+*.tar
+*.jar
+
+# Test / coverage
+/test-output/
+/target/
+/out/
+/coverage/
+
+# Keycloak tmp
+keycloak/data/
+
+# Node (if frontend added later)
+node_modules/
+dist/

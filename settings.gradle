@@ -1,0 +1,11 @@
+rootProject.name = 'expenses-platform'
+
+include(
+  'libs:common',
+  'services:gateway',
+  'services:svc-identity-config',
+  'services:svc-user',
+  'services:svc-group',
+  'services:svc-expense',
+  'services:svc-fx'
+)

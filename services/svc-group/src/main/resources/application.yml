@@ -1,0 +1,23 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: svc-group
+  datasource:
+    url: jdbc:postgresql://pg-group:5432/groupdb
+    username: group
+    password: group
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
+management.endpoints.web.exposure.include: health,info,prometheus

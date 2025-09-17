@@ -1,0 +1,20 @@
+plugins {
+  alias(libs.plugins.java)
+  alias(libs.plugins.spring.boot)
+  alias(libs.plugins.depman)
+}
+
+dependencies {
+  implementation(libs.spring.boot.starter.web)
+  implementation(libs.spring.boot.starter.actuator)
+  implementation(libs.springdoc.openapi.starter)
+
+implementation(libs.spring.boot.starter.security)
+implementation(libs.spring.boot.starter.oauth2.resource.server)
+
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

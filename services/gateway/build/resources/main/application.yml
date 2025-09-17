@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      default-filters:
+        - RemoveRequestHeader=Cookie
+      routes:
+        - id: svc-user
+          uri: http://svc-user:8080
+          predicates:
+            - Path=/user/**
+        - id: svc-group
+          uri: http://svc-group:8080
+          predicates:
+            - Path=/groups/**
+        - id: svc-expense
+          uri: http://svc-expense:8080
+          predicates:
+            - Path=/expenses/**
+        - id: svc-fx
+          uri: http://svc-fx:8080
+          predicates:
+            - Path=/fx/**
+
+  main:
+    web-application-type: reactive
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
