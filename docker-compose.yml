@@ -66,6 +66,14 @@ services:
       POSTGRES_PASSWORD: ledger
     ports: ["5436:5432"]
 
+  pg-split-engine:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: splitenginedb
+      POSTGRES_USER: splitengine
+      POSTGRES_PASSWORD: splitengine
+    ports: ["5437:5432"]
+
   gateway:
     build: ./services/gateway
     environment:
@@ -101,5 +109,11 @@ services:
   svc-ledger:
     build: ./services/svc-ledger
     depends_on: [pg-ledger, kafka, keycloak]
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  svc-split-engine:
+    build: ./services/svc-split-engine
+    depends_on: [pg-split-engine, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker

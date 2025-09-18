@@ -8,5 +8,6 @@ include(
   'services:svc-group',
   'services:svc-expense',
   'services:svc-fx',
-  'services:svc-ledger'
+  'services:svc-ledger',
+  'services:svc-split-engine'
 )
