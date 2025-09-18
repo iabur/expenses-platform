@@ -58,6 +58,14 @@ services:
       POSTGRES_PASSWORD: expense
     ports: ["5435:5432"]
 
+  pg-ledger:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ledgerdb
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+    ports: ["5436:5432"]
+
   gateway:
     build: ./services/gateway
     environment:
@@ -87,5 +95,11 @@ services:
   svc-fx:
     build: ./services/svc-fx
     depends_on: [keycloak]
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  svc-ledger:
+    build: ./services/svc-ledger
+    depends_on: [pg-ledger, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
