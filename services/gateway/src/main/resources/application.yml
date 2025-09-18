@@ -8,31 +8,149 @@ spring:
     gateway:
       default-filters:
         - RemoveRequestHeader=Cookie
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.requestedTokens: 1
+            key-resolver: "#{@userKeyResolver}"
+        - name: CircuitBreaker
+          args:
+            name: defaultCircuitBreaker
+            fallbackUri: forward:/fallback
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: 
+              - "http://localhost:*"
+              - "https://*.expenses-platform.com"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+              - PATCH
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
       routes:
+        # User Service Routes
         - id: svc-user
-          uri: http://svc-user:8080
+          uri: lb://svc-user
           predicates:
-            - Path=/user/**
+            - Path=/api/users/**
+          filters:
+            - RewritePath=/api/users/(?<segment>.*), /api/me/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+        
+        # Group Service Routes  
         - id: svc-group
-          uri: http://svc-group:8080
+          uri: lb://svc-group
           predicates:
-            - Path=/groups/**
-        - id: svc-expense
-          uri: http://svc-expense:8080
+            - Path=/api/groups/**
+          filters:
+            - RewritePath=/api/groups/(?<segment>.*), /api/groups/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+        
+        # Expense Service Routes
+        - id: svc-expense  
+          uri: lb://svc-expense
           predicates:
-            - Path=/expenses/**
+            - Path=/api/expenses/**
+          filters:
+            - RewritePath=/api/expenses/(?<segment>.*), /api/expenses/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 40
+                redis-rate-limiter.burstCapacity: 80
+        
+        # Split Engine Service Routes
+        - id: svc-split-engine
+          uri: lb://svc-split-engine  
+          predicates:
+            - Path=/api/splits/**
+          filters:
+            - RewritePath=/api/splits/(?<segment>.*), /api/splits/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+        
+        # Ledger Service Routes (Internal only)
+        - id: svc-ledger
+          uri: lb://svc-ledger
+          predicates:
+            - Path=/internal/ledger/**
+          filters:
+            - RewritePath=/internal/ledger/(?<segment>.*), /api/ledger/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+        
+        # FX Service Routes
         - id: svc-fx
-          uri: http://svc-fx:8080
+          uri: lb://svc-fx
           predicates:
-            - Path=/fx/**
+            - Path=/api/fx/**
+          filters:
+            - RewritePath=/api/fx/(?<segment>.*), /api/fx/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 60
+                redis-rate-limiter.burstCapacity: 120
+      
+      # Load Balancer Configuration
+      loadbalancer:
+        use404: true
+      
+      # Discovery Configuration  
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
 
   main:
     web-application-type: reactive
+  
+  # Redis for Rate Limiting
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+  
   security:
     oauth2:
-      resource server:
+      resourceserver:
         jwt:
           jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
+          
+  # Circuit Breaker Configuration
+  cloud:
+    circuitbreaker:
+      resilience4j:
+        enabled: true
+      circuit-breaker:
+        configs:
+          default:
+            sliding-window-size: 10
+            minimum-number-of-calls: 5
+            failure-rate-threshold: 50
+            wait-duration-in-open-state: 10000
+            permitted-number-of-calls-in-half-open-state: 3
+            automatic-transition-from-open-to-half-open-enabled: true
 
 management:
   endpoints:

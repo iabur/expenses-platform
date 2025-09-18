@@ -9,13 +9,35 @@ dependencyManagement {
 }
 
 dependencies {
-  implementation(libs.spring.boot.starter.web)
+  implementation(libs.spring.boot.starter.webflux)
   implementation(libs.spring.boot.starter.actuator)
   implementation(libs.springdoc.openapi.starter)
 
   implementation(libs.spring.cloud.gateway)
   implementation(libs.spring.boot.starter.security)
   implementation(libs.spring.boot.starter.oauth2.resource.server)
+  
+  // Rate Limiting with Redis
+  implementation(libs.spring.boot.starter.data.redis.reactive)
+  
+  // Circuit Breaker
+  implementation('org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j')
+  
+  // Load Balancer
+  implementation('org.springframework.cloud:spring-cloud-starter-loadbalancer')
+  
+  // Monitoring & Observability
+  implementation('io.micrometer:micrometer-registry-prometheus')
+  
+  // Common library for events
+  implementation project(':libs:common')
+  
+  // Lombok
+  compileOnly(libs.lombok)
+  annotationProcessor(libs.lombok)
 
   testImplementation(libs.spring.boot.starter.test)
+  testImplementation('org.springframework.security:spring-security-test')
+  testCompileOnly(libs.lombok)
+  testAnnotationProcessor(libs.lombok)
 }
