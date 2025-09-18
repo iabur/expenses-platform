@@ -1,38 +1,30 @@
 plugins {
-  alias(libs.plugins.depman)
+    alias(libs.plugins.depman) apply false
 }
 
 allprojects {
-  group = 'com.expenses'
-  version = '0.1.0-SNAPSHOT'
+    group = 'com.expenses'
+    version = '0.1.0-SNAPSHOT'
 }
 
 subprojects {
-  apply plugin: 'java'
-  apply plugin: 'io.spring.dependency-management'
-
-  java {
-    toolchain {
-      languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInteger())
+    apply plugin: 'java'
+    apply plugin: libs.plugins.depman.get().pluginId
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInteger())
+        }
     }
-  }
 
-  repositories {
-    mavenCentral()
-  // Apply org.apache.commons:commons-lang3 version override across all subprojects
-  dependencyManagement {
+    repositories {
+        mavenCentral()
+    }
+
     dependencies {
-      dependency 'org.apache.commons:commons-lang3:3.17.0'
+        testImplementation libs.junit.jupiter
     }
-  }
 
-  }
-
-  dependencies {
-    testImplementation libs.junit.jupiter
-  }
-
-  test {
-    useJUnitPlatform()
-  }
+    test {
+        useJUnitPlatform()
+    }
 }
