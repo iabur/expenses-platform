@@ -26,9 +26,9 @@ public class ExpenseLineItem {
   @NotBlank(message = "Description is required")
   private String description;
 
-  @Column(precision = 10, scale = 3, nullable = false)
+  @Column(nullable = false)
   @Positive(message = "Quantity must be positive")
-  private BigDecimal quantity = BigDecimal.ONE;
+  private Integer quantity = 1;
 
   @Column(name = "unit_price_cents", nullable = false)
   @Positive(message = "Unit price must be positive")
@@ -49,12 +49,12 @@ public class ExpenseLineItem {
   public ExpenseLineItem() {
   }
 
-  public ExpenseLineItem(Expense expense, String description, BigDecimal quantity, Long unitPriceCents) {
+  public ExpenseLineItem(Expense expense, String description, Integer quantity, Long unitPriceCents) {
     this.expense = expense;
     this.description = description;
     this.quantity = quantity;
     this.unitPriceCents = unitPriceCents;
-    this.totalPriceCents = quantity.multiply(BigDecimal.valueOf(unitPriceCents)).longValue();
+    this.totalPriceCents = BigDecimal.valueOf(quantity).multiply(BigDecimal.valueOf(unitPriceCents)).longValue();
   }
 
   // Getters and Setters
@@ -82,11 +82,11 @@ public class ExpenseLineItem {
     this.description = description;
   }
 
-  public BigDecimal getQuantity() {
+  public Integer getQuantity() {
     return quantity;
   }
 
-  public void setQuantity(BigDecimal quantity) {
+  public void setQuantity(Integer quantity) {
     this.quantity = quantity;
     updateTotalPrice();
   }
@@ -144,7 +144,7 @@ public class ExpenseLineItem {
 
   private void updateTotalPrice() {
     if (quantity != null && unitPriceCents != null) {
-      this.totalPriceCents = quantity.multiply(BigDecimal.valueOf(unitPriceCents)).longValue();
+      this.totalPriceCents = BigDecimal.valueOf(quantity).multiply(BigDecimal.valueOf(unitPriceCents)).longValue();
     }
   }
 
