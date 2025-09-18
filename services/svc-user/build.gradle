@@ -18,7 +18,3 @@ implementation(libs.flyway.database.postgresql)
 
   testImplementation(libs.spring.boot.starter.test)
 }
-
-tasks.named('test') {
-    useJUnitPlatform()
-}

@@ -13,16 +13,23 @@ subprojects {
 
   java {
     toolchain {
-      languageVersion = JavaLanguageVersion.of(21)
+      languageVersion = JavaLanguageVersion.of(libs.versions.java.get().toInteger())
     }
   }
 
   repositories {
     mavenCentral()
+  // Apply org.apache.commons:commons-lang3 version override across all subprojects
+  dependencyManagement {
+    dependencies {
+      dependency 'org.apache.commons:commons-lang3:3.17.0'
+    }
+  }
+
   }
 
   dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.3'
+    testImplementation libs.junit.jupiter
   }
 
   test {
