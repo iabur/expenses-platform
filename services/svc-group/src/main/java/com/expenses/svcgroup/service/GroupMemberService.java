@@ -17,6 +17,8 @@ import com.expenses.svcgroup.exception.MemberNotFoundException;
 import com.expenses.svcgroup.exception.UserAlreadyMemberException;
 import com.expenses.svcgroup.repository.GroupMemberRepository;
 import com.expenses.svcgroup.repository.GroupRepository;
+import com.expenses.common.event.EventPublisher;
+import com.expenses.common.event.GroupEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class GroupMemberService {
 
   private final GroupRepository groupRepository;
   private final GroupMemberRepository groupMemberRepository;
+  private final EventPublisher eventPublisher;
 
   /**
    * Add member to group (admin only)
@@ -59,6 +62,14 @@ public class GroupMemberService {
         .build();
 
     GroupMember savedMember = groupMemberRepository.save(member);
+
+    // Publish member added event
+    GroupEvent.MemberAdded event = new GroupEvent.MemberAdded(
+        groupId,
+        request.userId(),
+        savedMember.getRole().name(),
+        currentUserId);
+    eventPublisher.publishEventAsync(event);
 
     log.info("Added user {} to group {} by admin {}", request.userId(), groupId, currentUserId);
 

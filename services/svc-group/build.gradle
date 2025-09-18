@@ -16,6 +16,9 @@ dependencies {
   implementation(libs.spring.kafka)
   implementation(libs.commons.lang3)
   
+  // Common library for events
+  implementation project(':libs:common')
+  
   compileOnly(libs.lombok)
   annotationProcessor(libs.lombok)
 

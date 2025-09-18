@@ -19,6 +19,8 @@ import com.expenses.svcgroup.exception.AccessDeniedException;
 import com.expenses.svcgroup.exception.GroupNotFoundException;
 import com.expenses.svcgroup.exception.UserAlreadyMemberException;
 import com.expenses.svcgroup.repository.GroupRepository;
+import com.expenses.common.event.EventPublisher;
+import com.expenses.common.event.GroupEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class GroupService {
 
   private final GroupRepository groupRepository;
+  private final EventPublisher eventPublisher;
 
   /**
    * Create a new group
@@ -63,6 +66,16 @@ public class GroupService {
     group.addMember(ownerMember);
 
     Group savedGroup = groupRepository.save(group);
+
+    // Publish group created event
+    GroupEvent.GroupCreated event = new GroupEvent.GroupCreated(
+        savedGroup.getId(),
+        savedGroup.getName(),
+        savedGroup.getDescription(),
+        savedGroup.getType().name(),
+        savedGroup.getDefaultCurrency(),
+        currentUserId);
+    eventPublisher.publishEventAsync(event);
 
     log.info("Created group {} with ID {}", savedGroup.getName(), savedGroup.getId());
 
@@ -117,6 +130,16 @@ public class GroupService {
 
     Group savedGroup = groupRepository.save(group);
 
+    // Publish group updated event
+    GroupEvent.GroupUpdated event = new GroupEvent.GroupUpdated(
+        groupId,
+        savedGroup.getName(),
+        savedGroup.getDescription(),
+        savedGroup.getDefaultCurrency(),
+        savedGroup.getAvatarUrl(),
+        currentUserId);
+    eventPublisher.publishEventAsync(event);
+
     log.info("Updated group {} by user {}", groupId, currentUserId);
 
     return GroupDto.fromWithMembers(savedGroup);
@@ -138,6 +161,10 @@ public class GroupService {
 
     group.setIsActive(false);
     groupRepository.save(group);
+
+    // Publish group deleted event
+    GroupEvent.GroupDeleted event = new GroupEvent.GroupDeleted(groupId, currentUserId);
+    eventPublisher.publishEventAsync(event);
 
     log.info("Deleted group {} by owner {}", groupId, currentUserId);
   }
