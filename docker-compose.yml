@@ -87,6 +87,14 @@ services:
       POSTGRES_PASSWORD: settlement
     ports: ["5438:5432"]
 
+  pg-fx:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fxdb
+      POSTGRES_USER: fxservice
+      POSTGRES_PASSWORD: fxpass123
+    ports: ["5439:5432"]
+
   gateway:
     build:
       context: .
@@ -120,14 +128,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
-  svc-fx:
-    build:
-      context: .
-      dockerfile: services/svc-fx/Dockerfile
-    depends_on: [keycloak]
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-
   svc-ledger:
     build:
       context: .
@@ -149,5 +149,15 @@ services:
       context: .
       dockerfile: services/svc-settlement/Dockerfile
     depends_on: [pg-settlement, kafka, keycloak]
+    ports: ["8085:8085"]
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  svc-fx:
+    build:
+      context: .
+      dockerfile: services/svc-fx/Dockerfile
+    depends_on: [pg-fx, kafka, keycloak]
+    ports: ["8088:8080"]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
