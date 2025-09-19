@@ -11,7 +11,7 @@ dependencyManagement {
 dependencies {
   implementation(libs.spring.boot.starter.webflux)
   implementation(libs.spring.boot.starter.actuator)
-  implementation(libs.springdoc.openapi.starter)
+  implementation(libs.springdoc.openapi.starter.webflux)
 
   implementation(libs.spring.cloud.gateway)
   implementation(libs.spring.boot.starter.security)

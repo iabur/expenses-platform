@@ -15,7 +15,8 @@ dependencies {
   api 'org.springframework:spring-messaging'
   api 'com.fasterxml.jackson.core:jackson-annotations'
   api 'com.fasterxml.jackson.core:jackson-databind'
-  api libs.springdoc.openapi.starter
+  // Keep only OpenAPI models here to avoid pulling WebMVC/WebFlux into common
+  api libs.swagger.models
 
   compileOnly libs.lombok
   annotationProcessor libs.lombok

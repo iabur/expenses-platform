@@ -20,8 +20,8 @@ spring:
             fallbackUri: forward:/fallback
       globalcors:
         cors-configurations:
-          '[/**]':
-            allowedOriginPatterns: 
+          "[/**]":
+            allowedOriginPatterns:
               - "http://localhost:*"
               - "https://*.expenses-platform.com"
             allowedMethods:
@@ -35,6 +35,59 @@ spring:
             allowCredentials: true
             maxAge: 3600
       routes:
+        # API Documentation Routes (served locally by the gateway app)
+        # Note: Do NOT self-route Swagger static assets or swagger-config through lb://gateway
+        # The following service API docs routes remain to proxy to downstream services
+
+        - id: user-api-docs
+          uri: http://svc-user:8080
+          predicates:
+            - Path=/v3/api-docs/users
+          filters:
+            - RewritePath=/v3/api-docs/users, /v3/api-docs
+
+        - id: group-api-docs
+          uri: http://svc-group:8080
+          predicates:
+            - Path=/v3/api-docs/groups
+          filters:
+            - RewritePath=/v3/api-docs/groups, /v3/api-docs
+
+        - id: expense-api-docs
+          uri: http://svc-expense:8080
+          predicates:
+            - Path=/v3/api-docs/expenses
+          filters:
+            - RewritePath=/v3/api-docs/expenses, /v3/api-docs
+
+        - id: ledger-api-docs
+          uri: http://svc-ledger:8080
+          predicates:
+            - Path=/v3/api-docs/ledger
+          filters:
+            - RewritePath=/v3/api-docs/ledger, /v3/api-docs
+
+        - id: settlement-api-docs
+          uri: http://svc-settlement:8085
+          predicates:
+            - Path=/v3/api-docs/settlements
+          filters:
+            - RewritePath=/v3/api-docs/settlements, /v3/api-docs
+
+        - id: split-engine-api-docs
+          uri: http://svc-split-engine:8084
+          predicates:
+            - Path=/v3/api-docs/split-engine
+          filters:
+            - RewritePath=/v3/api-docs/split-engine, /v3/api-docs
+
+        - id: fx-api-docs
+          uri: http://svc-fx:8080
+          predicates:
+            - Path=/v3/api-docs/fx
+          filters:
+            - RewritePath=/v3/api-docs/fx, /v3/api-docs
+
         # User Service Routes
         - id: svc-user
           uri: lb://svc-user
@@ -46,8 +99,8 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 50
                 redis-rate-limiter.burstCapacity: 100
-        
-        # Group Service Routes  
+
+        # Group Service Routes
         - id: svc-group
           uri: lb://svc-group
           predicates:
@@ -58,9 +111,9 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 30
                 redis-rate-limiter.burstCapacity: 60
-        
+
         # Expense Service Routes
-        - id: svc-expense  
+        - id: svc-expense
           uri: lb://svc-expense
           predicates:
             - Path=/api/expenses/**
@@ -70,10 +123,10 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 40
                 redis-rate-limiter.burstCapacity: 80
-        
+
         # Split Engine Service Routes
         - id: svc-split-engine
-          uri: lb://svc-split-engine  
+          uri: lb://svc-split-engine
           predicates:
             - Path=/api/splits/**
           filters:
@@ -82,7 +135,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 20
                 redis-rate-limiter.burstCapacity: 40
-        
+
         # Ledger Service Routes (Internal only)
         - id: svc-ledger
           uri: lb://svc-ledger
@@ -94,7 +147,7 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 10
                 redis-rate-limiter.burstCapacity: 20
-        
+
         # FX Service Routes
         - id: svc-fx
           uri: lb://svc-fx
@@ -106,16 +159,33 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 60
                 redis-rate-limiter.burstCapacity: 120
-      
+
       # Load Balancer Configuration
       loadbalancer:
         use404: true
-      
-      # Discovery Configuration  
+
+      # Discovery Configuration
       discovery:
         locator:
           enabled: true
           lower-case-service-id: true
+        client:
+          simple:
+            instances:
+              svc-user:
+                - uri: http://svc-user:8080
+              svc-group:
+                - uri: http://svc-group:8080
+              svc-expense:
+                - uri: http://svc-expense:8080
+              svc-ledger:
+                - uri: http://svc-ledger:8080
+              svc-settlement:
+                - uri: http://svc-settlement:8080
+              svc-split-engine:
+                - uri: http://svc-split-engine:8080
+              svc-fx:
+                - uri: http://svc-fx:8080
     circuitbreaker:
       resilience4j:
         enabled: true
@@ -131,7 +201,7 @@ spring:
 
   main:
     web-application-type: reactive
-  
+
   # Redis for Rate Limiting
   redis:
     host: localhost
@@ -142,12 +212,14 @@ spring:
         max-active: 8
         max-idle: 8
         min-idle: 0
-  
+
   security:
     oauth2:
       resourceserver:
         jwt:
           jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
+
+  # Simple Discovery Client mapping moved under spring.cloud above
 
 management:
   endpoints:
@@ -157,6 +229,20 @@ management:
   endpoint:
     health:
       show-details: always
+
+# SpringDoc Configuration
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    config-url: /internal/api-docs/swagger-config
+    disable-swagger-default-url: true
+    display-request-duration: true
+    urls-primary-name: Gateway Service
+  api-docs:
+    path: /internal/api-docs
+    enabled: true
+  cache:
+    disabled: true
 
 logging:
   level:
