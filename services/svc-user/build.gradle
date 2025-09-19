@@ -15,5 +15,10 @@ implementation(libs.flyway)
 implementation(libs.flyway.database.postgresql)
 implementation(libs.spring.kafka)
 
+  compileOnly(libs.lombok)
+  annotationProcessor(libs.lombok)
+  
   testImplementation(libs.spring.boot.starter.test)
+  testCompileOnly(libs.lombok)
+  testAnnotationProcessor(libs.lombok)
 }

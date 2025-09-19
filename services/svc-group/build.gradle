@@ -23,6 +23,7 @@ dependencies {
   annotationProcessor(libs.lombok)
 
   testImplementation(libs.spring.boot.starter.test)
+  testImplementation('org.springframework.security:spring-security-test')
   testCompileOnly(libs.lombok)
   testAnnotationProcessor(libs.lombok)
 }
