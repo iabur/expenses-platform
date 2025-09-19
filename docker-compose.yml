@@ -79,6 +79,14 @@ services:
       POSTGRES_PASSWORD: splitengine
     ports: ["5437:5432"]
 
+  pg-settlement:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: settlementdb
+      POSTGRES_USER: settlement
+      POSTGRES_PASSWORD: settlement
+    ports: ["5438:5432"]
+
   gateway:
     build: ./services/gateway
     depends_on: [keycloak, redis]
@@ -119,5 +127,11 @@ services:
   svc-split-engine:
     build: ./services/svc-split-engine
     depends_on: [pg-split-engine, kafka, keycloak]
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  svc-settlement:
+    build: ./services/svc-settlement
+    depends_on: [pg-settlement, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker

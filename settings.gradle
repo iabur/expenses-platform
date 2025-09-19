@@ -9,5 +9,6 @@ include(
   'services:svc-expense',
   'services:svc-fx',
   'services:svc-ledger',
-  'services:svc-split-engine'
+  'services:svc-split-engine',
+  'services:svc-settlement'
 )
