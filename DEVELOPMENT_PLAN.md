@@ -56,10 +56,10 @@ A **next-generation expense sharing platform** that surpasses Splitwise with adv
 - [x] **Swagger Documentation** - API docs for all services
 - [x] **Docker Deployment** - All services containerized with docker-compose
 - [x] **Database Setup** - PostgreSQL for all services with Flyway migrations
-- [x] **Basic FX Service** - Static exchange rates, basic currency conversion ✅ **COMPLETED**
-- [x] **Basic Ledger Service** - Simple balance tracking, basic accounting ✅ **COMPLETED**
-- [x] **Error Handling** - Global exception handlers, proper HTTP status codes ✅ **COMPLETED**
-- [x] **Input Validation** - Bean validation, custom validators for all DTOs ✅ **COMPLETED**
+- [x] **Basic FX Service** - Static exchange rates, basic currency conversion
+- [x] **Basic Ledger Service** - Simple balance tracking, basic accounting
+- [x] **Error Handling** - Global exception handlers, proper HTTP status codes
+- [x] **Input Validation** - Bean validation, custom validators for all DTOs
 
 ### ✅ ALL PHASE 1 TASKS COMPLETED!
 - [x] **Unit Tests** - Cancelled (will be added in future iterations) ⚠️ **DEFERRED**
