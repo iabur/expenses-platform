@@ -15,9 +15,14 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
   security:
     oauth2:
-      resource server:
+      resourceserver:
         jwt:
           jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
 management.endpoints.web.exposure.include: health,info,prometheus

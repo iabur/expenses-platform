@@ -1,7 +1,6 @@
 package com.expenses.svcledger.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
@@ -23,8 +22,7 @@ public class AccountBalance {
   @Column(name = "balance_cents", nullable = false)
   private Long balanceCents = 0L;
 
-  @Column(length = 3, nullable = false)
-  @NotNull(message = "Currency is required")
+  @Column(nullable = false, columnDefinition = "char(3)")
   private String currency;
 
   @UpdateTimestamp

@@ -13,6 +13,7 @@ implementation(libs.spring.boot.starter.data.jpa)
 implementation(libs.postgres)
 implementation(libs.flyway)
 implementation(libs.flyway.database.postgresql)
+implementation(libs.spring.kafka)
 
   testImplementation(libs.spring.boot.starter.test)
 }

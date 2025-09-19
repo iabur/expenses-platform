@@ -17,9 +17,12 @@ spring:
     locations: classpath:db/migration
   kafka:
     bootstrap-servers: kafka:9092
-security:
-  oauth2:
-    resourceserver:
-      jwt:
-        jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
 management.endpoints.web.exposure.include: health,info,prometheus

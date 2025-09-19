@@ -7,11 +7,15 @@
 **/.gradle/
 **/out/
 **/target/
+**/bin/
 
 # IDEs
 *.iml
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
@@ -19,6 +23,8 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
+spring.log
 
 # Docker
 *.pid

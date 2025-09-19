@@ -88,50 +88,66 @@ services:
     ports: ["5438:5432"]
 
   gateway:
-    build: ./services/gateway
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
     depends_on: [keycloak, redis]
     ports: ["8080:8080"]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-user:
-    build: ./services/svc-user
+    build:
+      context: .
+      dockerfile: services/svc-user/Dockerfile
     depends_on: [pg-user, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-group:
-    build: ./services/svc-group
+    build:
+      context: .
+      dockerfile: services/svc-group/Dockerfile
     depends_on: [pg-group, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-expense:
-    build: ./services/svc-expense
+    build:
+      context: .
+      dockerfile: services/svc-expense/Dockerfile
     depends_on: [pg-expense, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-fx:
-    build: ./services/svc-fx
+    build:
+      context: .
+      dockerfile: services/svc-fx/Dockerfile
     depends_on: [keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-ledger:
-    build: ./services/svc-ledger
+    build:
+      context: .
+      dockerfile: services/svc-ledger/Dockerfile
     depends_on: [pg-ledger, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-split-engine:
-    build: ./services/svc-split-engine
+    build:
+      context: .
+      dockerfile: services/svc-split-engine/Dockerfile
     depends_on: [pg-split-engine, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
 
   svc-settlement:
-    build: ./services/svc-settlement
+    build:
+      context: .
+      dockerfile: services/svc-settlement/Dockerfile
     depends_on: [pg-settlement, kafka, keycloak]
     environment:
       - SPRING_PROFILES_ACTIVE=docker
