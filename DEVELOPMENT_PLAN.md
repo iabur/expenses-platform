@@ -43,7 +43,7 @@ A **next-generation expense sharing platform** that surpasses Splitwise with adv
 
 ---
 
-## 🎯 PHASE 1: BASIC MVP (10/15 Complete - 67%)
+## 🎯 PHASE 1: BASIC MVP (12/15 Complete - 80%)
 
 ### ✅ COMPLETED TASKS:
 - [x] **User Service** - Authentication, profiles, basic CRUD operations
@@ -56,10 +56,10 @@ A **next-generation expense sharing platform** that surpasses Splitwise with adv
 - [x] **Swagger Documentation** - API docs for all services
 - [x] **Docker Deployment** - All services containerized with docker-compose
 - [x] **Database Setup** - PostgreSQL for all services with Flyway migrations
+- [x] **Basic FX Service** - Static exchange rates, basic currency conversion ✅ **COMPLETED**
+- [x] **Basic Ledger Service** - Simple balance tracking, basic accounting ✅ **COMPLETED**
 
 ### ❌ REMAINING TASKS (Priority Order):
-- [ ] **Basic FX Service** - Static exchange rates, basic currency conversion
-- [ ] **Basic Ledger Service** - Simple balance tracking, basic accounting
 - [ ] **Basic Unit Tests** - Controller and Service layer tests for all services
 - [ ] **Error Handling** - Global exception handlers, proper HTTP status codes
 - [ ] **Input Validation** - Bean validation, custom validators for all DTOs
@@ -150,8 +150,8 @@ A **next-generation expense sharing platform** that surpasses Splitwise with adv
 
 ## 📋 CURRENT STATUS SUMMARY
 
-- **Total Progress:** 10/42 tasks completed (24%)
-- **Phase 1:** 67% complete (ready for production MVP)
+- **Total Progress:** 12/42 tasks completed (29%)
+- **Phase 1:** 80% complete (ready for production MVP)
 - **Phase 2:** 0% complete (advanced features)
 - **Phase 3:** 0% complete (enterprise features)
 

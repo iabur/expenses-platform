@@ -1,176 +1,235 @@
--- Ledger Double-Entry Bookkeeping Schema
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Ledger Service Database Schema
+-- Double-entry bookkeeping system for expense tracking
 
--- Accounts table (represents user accounts and group accounts)
+-- Accounts table - represents financial accounts for users and groups
 CREATE TABLE accounts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_code VARCHAR(50) UNIQUE NOT NULL, -- e.g., "user:uuid" or "group:uuid"
-    owner_type VARCHAR(20) NOT NULL CHECK (owner_type IN ('user', 'group')),
-    owner_id UUID NOT NULL, -- Reference to user or group
-    currency CHAR(3) NOT NULL,
-    account_name VARCHAR(200) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_code VARCHAR(100) UNIQUE NOT NULL,
+    owner_type VARCHAR(20) NOT NULL CHECK (owner_type IN ('USER', 'GROUP', 'SYSTEM')),
+    owner_id UUID NOT NULL,
+    currency VARCHAR(3) NOT NULL,
+    account_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    
+    -- Unique constraint: one account per owner per currency
     UNIQUE(owner_type, owner_id, currency)
 );
 
--- Journal entries (groups related postings together)
-CREATE TABLE journal_entries (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    reference_type VARCHAR(20) NOT NULL, -- expense, payment, settlement
-    reference_id UUID NOT NULL, -- ID of the expense/payment/settlement
-    group_id UUID NOT NULL, -- Reference to group for isolation
-    description TEXT NOT NULL,
-    value_date DATE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    created_by UUID NOT NULL -- Reference to user who created this entry
+-- Account balances table - current balance for each account
+CREATE TABLE account_balances (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID UNIQUE NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    balance_cents BIGINT DEFAULT 0 NOT NULL,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    last_transaction_id UUID,
+    version BIGINT DEFAULT 0 NOT NULL,
+    
+    CHECK (balance_cents IS NOT NULL)
 );
 
--- Postings table (individual debit/credit entries)
+-- Journal entries table - represents financial transactions
+CREATE TABLE journal_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reference_type VARCHAR(20) NOT NULL CHECK (reference_type IN ('EXPENSE', 'PAYMENT', 'SETTLEMENT', 'ADJUSTMENT')),
+    reference_id UUID NOT NULL,
+    group_id UUID NOT NULL,
+    description TEXT NOT NULL,
+    value_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    created_by UUID NOT NULL
+);
+
+-- Postings table - individual debit/credit entries (double-entry bookkeeping)
 CREATE TABLE postings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     journal_entry_id UUID NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
     debit_account_id UUID REFERENCES accounts(id),
     credit_account_id UUID REFERENCES accounts(id),
     amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
-    currency CHAR(3) NOT NULL,
-    fx_rate DECIMAL(18,8), -- Exchange rate if different from account currency
-    narrative TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    currency VARCHAR(3) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    
+    -- Constraint: must have exactly one of debit or credit account
     CHECK (
         (debit_account_id IS NOT NULL AND credit_account_id IS NULL) OR
         (debit_account_id IS NULL AND credit_account_id IS NOT NULL)
     )
 );
 
--- Balance snapshots (materialized view for performance)
-CREATE TABLE account_balances (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    balance_cents BIGINT NOT NULL DEFAULT 0,
-    currency CHAR(3) NOT NULL,
-    last_updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE(account_id)
-);
-
--- Settlement proposals (computed minimal transfers)
-CREATE TABLE settlement_proposals (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    group_id UUID NOT NULL,
-    proposal_data JSONB NOT NULL, -- Array of {fromUserId, toUserId, amount, currency}
-    total_transfers INTEGER NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'active', -- active, superseded
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    created_by UUID NOT NULL
-);
-
--- Audit trail for all balance changes
-CREATE TABLE balance_audit_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id UUID NOT NULL REFERENCES accounts(id),
-    journal_entry_id UUID NOT NULL REFERENCES journal_entries(id),
-    balance_before_cents BIGINT NOT NULL,
-    balance_after_cents BIGINT NOT NULL,
-    change_cents BIGINT NOT NULL,
-    currency CHAR(3) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
 -- Indexes for performance
 CREATE INDEX idx_accounts_owner ON accounts(owner_type, owner_id);
 CREATE INDEX idx_accounts_currency ON accounts(currency);
-CREATE INDEX idx_journal_entries_reference ON journal_entries(reference_type, reference_id);
-CREATE INDEX idx_journal_entries_group_id ON journal_entries(group_id);
-CREATE INDEX idx_journal_entries_value_date ON journal_entries(value_date);
-CREATE INDEX idx_postings_journal_entry_id ON postings(journal_entry_id);
-CREATE INDEX idx_postings_debit_account_id ON postings(debit_account_id);
-CREATE INDEX idx_postings_credit_account_id ON postings(credit_account_id);
-CREATE INDEX idx_postings_created_at ON postings(created_at);
-CREATE INDEX idx_account_balances_account_id ON account_balances(account_id);
-CREATE INDEX idx_settlement_proposals_group_id ON settlement_proposals(group_id);
-CREATE INDEX idx_settlement_proposals_status ON settlement_proposals(status);
-CREATE INDEX idx_balance_audit_log_account_id ON balance_audit_log(account_id);
-CREATE INDEX idx_balance_audit_log_journal_entry_id ON balance_audit_log(journal_entry_id);
+CREATE INDEX idx_accounts_active ON accounts(is_active) WHERE is_active = true;
+CREATE INDEX idx_accounts_code ON accounts(account_code);
 
--- Function to update account balances automatically
-CREATE OR REPLACE FUNCTION update_account_balance()
+CREATE INDEX idx_account_balances_account ON account_balances(account_id);
+CREATE INDEX idx_account_balances_updated ON account_balances(last_updated DESC);
+
+CREATE INDEX idx_journal_entries_reference ON journal_entries(reference_type, reference_id);
+CREATE INDEX idx_journal_entries_group ON journal_entries(group_id);
+CREATE INDEX idx_journal_entries_date ON journal_entries(value_date DESC);
+CREATE INDEX idx_journal_entries_created_by ON journal_entries(created_by);
+
+CREATE INDEX idx_postings_journal ON postings(journal_entry_id);
+CREATE INDEX idx_postings_debit_account ON postings(debit_account_id);
+CREATE INDEX idx_postings_credit_account ON postings(credit_account_id);
+CREATE INDEX idx_postings_currency ON postings(currency);
+CREATE INDEX idx_postings_created_at ON postings(created_at DESC);
+
+-- Create system accounts for common scenarios
+INSERT INTO accounts (account_code, owner_type, owner_id, currency, account_name, description) VALUES
+-- System accounts for different currencies
+('SYSTEM:EXPENSES:USD', 'SYSTEM', '00000000-0000-0000-0000-000000000001', 'USD', 'System Expenses USD', 'System account for USD expenses'),
+('SYSTEM:EXPENSES:EUR', 'SYSTEM', '00000000-0000-0000-0000-000000000001', 'EUR', 'System Expenses EUR', 'System account for EUR expenses'),
+('SYSTEM:EXPENSES:BDT', 'SYSTEM', '00000000-0000-0000-0000-000000000001', 'BDT', 'System Expenses BDT', 'System account for BDT expenses'),
+('SYSTEM:SETTLEMENTS:USD', 'SYSTEM', '00000000-0000-0000-0000-000000000002', 'USD', 'System Settlements USD', 'System account for USD settlements'),
+('SYSTEM:SETTLEMENTS:EUR', 'SYSTEM', '00000000-0000-0000-0000-000000000002', 'EUR', 'System Settlements EUR', 'System account for EUR settlements'),
+('SYSTEM:SETTLEMENTS:BDT', 'SYSTEM', '00000000-0000-0000-0000-000000000002', 'BDT', 'System Settlements BDT', 'System account for BDT settlements');
+
+-- Create corresponding account balances for system accounts
+INSERT INTO account_balances (account_id, balance_cents, last_updated) 
+SELECT id, 0, NOW() FROM accounts WHERE owner_type = 'SYSTEM';
+
+-- Create function to automatically create account balance when account is created
+CREATE OR REPLACE FUNCTION create_account_balance()
 RETURNS TRIGGER AS $$
-DECLARE
-    account_id_to_update UUID;
-    current_balance BIGINT;
-    new_balance BIGINT;
-    balance_change BIGINT;
 BEGIN
-    -- Handle both debit and credit accounts
-    IF NEW.debit_account_id IS NOT NULL THEN
-        account_id_to_update := NEW.debit_account_id;
-        balance_change := NEW.amount_cents;
-    ELSE
-        account_id_to_update := NEW.credit_account_id;
-        balance_change := -NEW.amount_cents;
-    END IF;
-    
-    -- Get current balance
-    SELECT COALESCE(balance_cents, 0) INTO current_balance
-    FROM account_balances 
-    WHERE account_id = account_id_to_update;
-    
-    -- Calculate new balance
-    new_balance := COALESCE(current_balance, 0) + balance_change;
-    
-    -- Upsert balance
-    INSERT INTO account_balances (account_id, balance_cents, currency, last_updated)
-    VALUES (account_id_to_update, new_balance, NEW.currency, NOW())
-    ON CONFLICT (account_id) 
-    DO UPDATE SET 
-        balance_cents = new_balance,
-        last_updated = NOW();
-    
-    -- Log the balance change
-    INSERT INTO balance_audit_log (
-        account_id, journal_entry_id, balance_before_cents, 
-        balance_after_cents, change_cents, currency
-    ) VALUES (
-        account_id_to_update, NEW.journal_entry_id, 
-        COALESCE(current_balance, 0), new_balance, balance_change, NEW.currency
-    );
-    
+    INSERT INTO account_balances (account_id, balance_cents, last_updated)
+    VALUES (NEW.id, 0, NOW());
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically update balances when postings are inserted
-CREATE TRIGGER trigger_update_account_balance
-    AFTER INSERT ON postings
+-- Trigger to automatically create account balance
+CREATE TRIGGER trigger_create_account_balance
+    AFTER INSERT ON accounts
     FOR EACH ROW
-    EXECUTE FUNCTION update_account_balance();
+    EXECUTE FUNCTION create_account_balance();
 
--- Function to validate journal entries (debits = credits)
+-- Create function to validate journal entry balance
 CREATE OR REPLACE FUNCTION validate_journal_balance()
 RETURNS TRIGGER AS $$
 DECLARE
     total_debits BIGINT;
     total_credits BIGINT;
 BEGIN
-    -- Calculate total debits and credits for this journal entry
+    -- Calculate total debits and credits for the journal entry
     SELECT 
         COALESCE(SUM(CASE WHEN debit_account_id IS NOT NULL THEN amount_cents ELSE 0 END), 0),
         COALESCE(SUM(CASE WHEN credit_account_id IS NOT NULL THEN amount_cents ELSE 0 END), 0)
     INTO total_debits, total_credits
     FROM postings 
-    WHERE journal_entry_id = NEW.journal_entry_id;
+    WHERE journal_entry_id = COALESCE(NEW.journal_entry_id, OLD.journal_entry_id);
     
-    -- Ensure debits equal credits
+    -- Check if journal entry is balanced
     IF total_debits != total_credits THEN
-        RAISE EXCEPTION 'Journal entry % is unbalanced: debits=% credits=%', 
-            NEW.journal_entry_id, total_debits, total_credits;
+        RAISE EXCEPTION 'Journal entry must be balanced: debits (%) != credits (%)', total_debits, total_credits;
     END IF;
     
-    RETURN NEW;
+    RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to validate journal balance after each posting
+-- Trigger to validate journal balance on posting changes
 CREATE TRIGGER trigger_validate_journal_balance
-    AFTER INSERT OR UPDATE ON postings
+    AFTER INSERT OR UPDATE OR DELETE ON postings
     FOR EACH ROW
     EXECUTE FUNCTION validate_journal_balance();
+
+-- Create function to update account balance when posting changes
+CREATE OR REPLACE FUNCTION update_account_balance()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Handle INSERT
+    IF TG_OP = 'INSERT' THEN
+        -- Update debit account balance
+        IF NEW.debit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents + NEW.amount_cents,
+                last_updated = NOW(),
+                last_transaction_id = NEW.journal_entry_id
+            WHERE account_id = NEW.debit_account_id;
+        END IF;
+        
+        -- Update credit account balance
+        IF NEW.credit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents - NEW.amount_cents,
+                last_updated = NOW(),
+                last_transaction_id = NEW.journal_entry_id
+            WHERE account_id = NEW.credit_account_id;
+        END IF;
+        
+        RETURN NEW;
+    END IF;
+    
+    -- Handle UPDATE
+    IF TG_OP = 'UPDATE' THEN
+        -- Reverse old posting effects
+        IF OLD.debit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents - OLD.amount_cents,
+                last_updated = NOW()
+            WHERE account_id = OLD.debit_account_id;
+        END IF;
+        
+        IF OLD.credit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents + OLD.amount_cents,
+                last_updated = NOW()
+            WHERE account_id = OLD.credit_account_id;
+        END IF;
+        
+        -- Apply new posting effects
+        IF NEW.debit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents + NEW.amount_cents,
+                last_updated = NOW(),
+                last_transaction_id = NEW.journal_entry_id
+            WHERE account_id = NEW.debit_account_id;
+        END IF;
+        
+        IF NEW.credit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents - NEW.amount_cents,
+                last_updated = NOW(),
+                last_transaction_id = NEW.journal_entry_id
+            WHERE account_id = NEW.credit_account_id;
+        END IF;
+        
+        RETURN NEW;
+    END IF;
+    
+    -- Handle DELETE
+    IF TG_OP = 'DELETE' THEN
+        -- Reverse posting effects
+        IF OLD.debit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents - OLD.amount_cents,
+                last_updated = NOW()
+            WHERE account_id = OLD.debit_account_id;
+        END IF;
+        
+        IF OLD.credit_account_id IS NOT NULL THEN
+            UPDATE account_balances 
+            SET balance_cents = balance_cents + OLD.amount_cents,
+                last_updated = NOW()
+            WHERE account_id = OLD.credit_account_id;
+        END IF;
+        
+        RETURN OLD;
+    END IF;
+    
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically update account balances
+CREATE TRIGGER trigger_update_account_balance
+    AFTER INSERT OR UPDATE OR DELETE ON postings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_account_balance();

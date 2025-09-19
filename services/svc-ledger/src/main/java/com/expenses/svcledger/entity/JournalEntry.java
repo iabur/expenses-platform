@@ -3,6 +3,7 @@ package com.expenses.svcledger.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDate;
@@ -13,161 +14,168 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "journal_entries")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(exclude = {"postings"})
+@ToString(exclude = {"postings"})
 public class JournalEntry {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private UUID id;
+    @Id
+    @GeneratedValue
+    @Column(name = "id")
+    private UUID id;
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "reference_type", length = 20, nullable = false)
-  private ReferenceType referenceType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reference_type", length = 20, nullable = false)
+    @NotNull(message = "Reference type is required")
+    private ReferenceType referenceType;
 
-  @Column(name = "reference_id", nullable = false)
-  @NotNull(message = "Reference ID is required")
-  private UUID referenceId;
+    @Column(name = "reference_id", nullable = false)
+    @NotNull(message = "Reference ID is required")
+    private UUID referenceId;
 
-  @Column(name = "group_id", nullable = false)
-  @NotNull(message = "Group ID is required")
-  private UUID groupId;
+    @Column(name = "group_id", nullable = false)
+    @NotNull(message = "Group ID is required")
+    private UUID groupId;
 
-  @Column(columnDefinition = "TEXT", nullable = false)
-  @NotBlank(message = "Description is required")
-  private String description;
+    @Column(name = "description", columnDefinition = "TEXT", nullable = false)
+    @NotBlank(message = "Description is required")
+    private String description;
 
-  @Column(name = "value_date", nullable = false)
-  @NotNull(message = "Value date is required")
-  private LocalDate valueDate;
+    @Column(name = "value_date", nullable = false)
+    @NotNull(message = "Value date is required")
+    private LocalDate valueDate;
 
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private ZonedDateTime createdAt;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private ZonedDateTime createdAt;
 
-  @Column(name = "created_by", nullable = false)
-  @NotNull(message = "Created by user ID is required")
-  private UUID createdBy;
+    @Column(name = "created_by", nullable = false)
+    @NotNull(message = "Created by user ID is required")
+    private UUID createdBy;
 
-  @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-  private List<Posting> postings = new ArrayList<>();
+    @Builder.Default
+    @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<Posting> postings = new ArrayList<>();
 
-  // Constructors
-  public JournalEntry() {
-  }
+    // Helper methods
+    public void addPosting(Posting posting) {
+        if (postings == null) {
+            postings = new ArrayList<>();
+        }
+        postings.add(posting);
+        posting.setJournalEntry(this);
+    }
 
-  public JournalEntry(ReferenceType referenceType, UUID referenceId, UUID groupId,
-      String description, LocalDate valueDate, UUID createdBy) {
-    this.referenceType = referenceType;
-    this.referenceId = referenceId;
-    this.groupId = groupId;
-    this.description = description;
-    this.valueDate = valueDate;
-    this.createdBy = createdBy;
-  }
+    public void removePosting(Posting posting) {
+        if (postings != null) {
+            postings.remove(posting);
+            posting.setJournalEntry(null);
+        }
+    }
 
-  // Getters and Setters
-  public UUID getId() {
-    return id;
-  }
+    public long getTotalDebits() {
+        if (postings == null)
+            return 0L;
+        return postings.stream()
+                .filter(p -> p.getDebitAccount() != null)
+                .mapToLong(Posting::getAmountCents)
+                .sum();
+    }
 
-  public void setId(UUID id) {
-    this.id = id;
-  }
+    public long getTotalCredits() {
+        if (postings == null)
+            return 0L;
+        return postings.stream()
+                .filter(p -> p.getCreditAccount() != null)
+                .mapToLong(Posting::getAmountCents)
+                .sum();
+    }
 
-  public ReferenceType getReferenceType() {
-    return referenceType;
-  }
+    public boolean isBalanced() {
+        return getTotalDebits() == getTotalCredits();
+    }
 
-  public void setReferenceType(ReferenceType referenceType) {
-    this.referenceType = referenceType;
-  }
+    public boolean hasPostings() {
+        return postings != null && !postings.isEmpty();
+    }
 
-  public UUID getReferenceId() {
-    return referenceId;
-  }
+    public int getPostingCount() {
+        return postings != null ? postings.size() : 0;
+    }
 
-  public void setReferenceId(UUID referenceId) {
-    this.referenceId = referenceId;
-  }
+    // Business methods
+    public String getJournalSummary() {
+        return String.format("Journal Entry: %s - %s (Debits: %s, Credits: %s, Balanced: %s)",
+                referenceType, description, getTotalDebits(), getTotalCredits(), isBalanced());
+    }
 
-  public UUID getGroupId() {
-    return groupId;
-  }
+    public boolean isExpenseEntry() {
+        return referenceType == ReferenceType.EXPENSE;
+    }
 
-  public void setGroupId(UUID groupId) {
-    this.groupId = groupId;
-  }
+    public boolean isPaymentEntry() {
+        return referenceType == ReferenceType.PAYMENT;
+    }
 
-  public String getDescription() {
-    return description;
-  }
+    public boolean isSettlementEntry() {
+        return referenceType == ReferenceType.SETTLEMENT;
+    }
 
-  public void setDescription(String description) {
-    this.description = description;
-  }
+    // Factory methods
+    public static JournalEntry forExpense(UUID expenseId, UUID groupId, String description,
+                                          LocalDate valueDate, UUID createdBy) {
+        return JournalEntry.builder()
+                .referenceType(ReferenceType.EXPENSE)
+                .referenceId(expenseId)
+                .groupId(groupId)
+                .description(description)
+                .valueDate(valueDate)
+                .createdBy(createdBy)
+                .build();
+    }
 
-  public LocalDate getValueDate() {
-    return valueDate;
-  }
+    public static JournalEntry forSettlement(UUID settlementId, UUID groupId, String description,
+                                             LocalDate valueDate, UUID createdBy) {
+        return JournalEntry.builder()
+                .referenceType(ReferenceType.SETTLEMENT)
+                .referenceId(settlementId)
+                .groupId(groupId)
+                .description(description)
+                .valueDate(valueDate)
+                .createdBy(createdBy)
+                .build();
+    }
 
-  public void setValueDate(LocalDate valueDate) {
-    this.valueDate = valueDate;
-  }
+    public static JournalEntry forPayment(UUID paymentId, UUID groupId, String description,
+                                          LocalDate valueDate, UUID createdBy) {
+        return JournalEntry.builder()
+                .referenceType(ReferenceType.PAYMENT)
+                .referenceId(paymentId)
+                .groupId(groupId)
+                .description(description)
+                .valueDate(valueDate)
+                .createdBy(createdBy)
+                .build();
+    }
 
-  public ZonedDateTime getCreatedAt() {
-    return createdAt;
-  }
+    // Reference type enum
+    public enum ReferenceType {
+        EXPENSE("Expense Entry"),
+        PAYMENT("Payment Entry"),
+        SETTLEMENT("Settlement Entry"),
+        ADJUSTMENT("Balance Adjustment");
 
-  public void setCreatedAt(ZonedDateTime createdAt) {
-    this.createdAt = createdAt;
-  }
+        private final String displayName;
 
-  public UUID getCreatedBy() {
-    return createdBy;
-  }
+        ReferenceType(String displayName) {
+            this.displayName = displayName;
+        }
 
-  public void setCreatedBy(UUID createdBy) {
-    this.createdBy = createdBy;
-  }
-
-  public List<Posting> getPostings() {
-    return postings;
-  }
-
-  public void setPostings(List<Posting> postings) {
-    this.postings = postings;
-  }
-
-  // Helper methods
-  public void addPosting(Posting posting) {
-    postings.add(posting);
-    posting.setJournalEntry(this);
-  }
-
-  public void removePosting(Posting posting) {
-    postings.remove(posting);
-    posting.setJournalEntry(null);
-  }
-
-  public long getTotalDebits() {
-    return postings.stream()
-        .filter(p -> p.getDebitAccount() != null)
-        .mapToLong(Posting::getAmountCents)
-        .sum();
-  }
-
-  public long getTotalCredits() {
-    return postings.stream()
-        .filter(p -> p.getCreditAccount() != null)
-        .mapToLong(Posting::getAmountCents)
-        .sum();
-  }
-
-  public boolean isBalanced() {
-    return getTotalDebits() == getTotalCredits();
-  }
-
-  // Reference type enum
-  public enum ReferenceType {
-    EXPENSE, PAYMENT, SETTLEMENT
-  }
+        public String getDisplayName() {
+            return displayName;
+        }
+    }
 }

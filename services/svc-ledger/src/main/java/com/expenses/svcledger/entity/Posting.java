@@ -3,6 +3,7 @@ package com.expenses.svcledger.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -11,192 +12,135 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "postings")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(exclude = {"journalEntry", "debitAccount", "creditAccount"})
+@ToString(exclude = {"journalEntry", "debitAccount", "creditAccount"})
 public class Posting {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private UUID id;
+    @Id
+    @GeneratedValue
+    @Column(name = "id")
+    private UUID id;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "journal_entry_id", nullable = false)
-  private JournalEntry journalEntry;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "journal_entry_id", nullable = false)
+    @NotNull(message = "Journal entry is required")
+    private JournalEntry journalEntry;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "debit_account_id")
-  private Account debitAccount;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "debit_account_id")
+    private Account debitAccount;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "credit_account_id")
-  private Account creditAccount;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credit_account_id")
+    private Account creditAccount;
 
-  @Column(name = "amount_cents", nullable = false)
-  @Positive(message = "Amount must be positive")
-  private Long amountCents;
+    @Column(name = "amount_cents", nullable = false)
+    @NotNull(message = "Amount is required")
+    @Positive(message = "Amount must be positive")
+    private Long amountCents;
 
-  @Column(length = 3, nullable = false)
-  @NotNull(message = "Currency is required")
-  private String currency;
+    @Column(name = "currency", length = 3, nullable = false)
+    @NotNull(message = "Currency is required")
+    private String currency;
 
-  @Column(name = "fx_rate", precision = 18, scale = 8)
-  private BigDecimal fxRate;
+    @Column(name = "description")
+    private String description;
 
-  @Column(columnDefinition = "TEXT")
-  private String narrative;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private ZonedDateTime createdAt;
 
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private ZonedDateTime createdAt;
-
-  // Constructors
-  public Posting() {
-  }
-
-  public Posting(JournalEntry journalEntry, Account debitAccount, Account creditAccount,
-      Long amountCents, String currency) {
-    this.journalEntry = journalEntry;
-    this.debitAccount = debitAccount;
-    this.creditAccount = creditAccount;
-    this.amountCents = amountCents;
-    this.currency = currency;
-  }
-
-  public Posting(JournalEntry journalEntry, Account debitAccount, Account creditAccount,
-      Long amountCents, String currency, String narrative) {
-    this.journalEntry = journalEntry;
-    this.debitAccount = debitAccount;
-    this.creditAccount = creditAccount;
-    this.amountCents = amountCents;
-    this.currency = currency;
-    this.narrative = narrative;
-  }
-
-  // Static factory methods for creating debit/credit postings
-  public static Posting debit(JournalEntry journalEntry, Account account, Long amountCents, String currency,
-      String narrative) {
-    return new Posting(journalEntry, account, null, amountCents, currency, narrative);
-  }
-
-  public static Posting credit(JournalEntry journalEntry, Account account, Long amountCents, String currency,
-      String narrative) {
-    return new Posting(journalEntry, null, account, amountCents, currency, narrative);
-  }
-
-  // Getters and Setters
-  public UUID getId() {
-    return id;
-  }
-
-  public void setId(UUID id) {
-    this.id = id;
-  }
-
-  public JournalEntry getJournalEntry() {
-    return journalEntry;
-  }
-
-  public void setJournalEntry(JournalEntry journalEntry) {
-    this.journalEntry = journalEntry;
-  }
-
-  public Account getDebitAccount() {
-    return debitAccount;
-  }
-
-  public void setDebitAccount(Account debitAccount) {
-    this.debitAccount = debitAccount;
-  }
-
-  public Account getCreditAccount() {
-    return creditAccount;
-  }
-
-  public void setCreditAccount(Account creditAccount) {
-    this.creditAccount = creditAccount;
-  }
-
-  public Long getAmountCents() {
-    return amountCents;
-  }
-
-  public void setAmountCents(Long amountCents) {
-    this.amountCents = amountCents;
-  }
-
-  public String getCurrency() {
-    return currency;
-  }
-
-  public void setCurrency(String currency) {
-    this.currency = currency;
-  }
-
-  public BigDecimal getFxRate() {
-    return fxRate;
-  }
-
-  public void setFxRate(BigDecimal fxRate) {
-    this.fxRate = fxRate;
-  }
-
-  public String getNarrative() {
-    return narrative;
-  }
-
-  public void setNarrative(String narrative) {
-    this.narrative = narrative;
-  }
-
-  public ZonedDateTime getCreatedAt() {
-    return createdAt;
-  }
-
-  public void setCreatedAt(ZonedDateTime createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  // Helper methods
-  public BigDecimal getAmountDecimal() {
-    return BigDecimal.valueOf(amountCents, 2);
-  }
-
-  public void setAmountDecimal(BigDecimal amount) {
-    this.amountCents = amount.movePointRight(2).longValue();
-  }
-
-  public boolean isDebit() {
-    return debitAccount != null;
-  }
-
-  public boolean isCredit() {
-    return creditAccount != null;
-  }
-
-  public Account getAccount() {
-    return isDebit() ? debitAccount : creditAccount;
-  }
-
-  public PostingType getType() {
-    return isDebit() ? PostingType.DEBIT : PostingType.CREDIT;
-  }
-
-  /**
-   * Get the effect on account balance (positive for debit, negative for credit)
-   */
-  public long getBalanceEffect() {
-    return isDebit() ? amountCents : -amountCents;
-  }
-
-  // Validation method
-  @PrePersist
-  @PreUpdate
-  private void validate() {
-    if ((debitAccount == null) == (creditAccount == null)) {
-      throw new IllegalStateException("Posting must have exactly one of debit or credit account");
+    // Helper methods
+    public BigDecimal getAmountDecimal() {
+        return amountCents != null ? BigDecimal.valueOf(amountCents, 2) : BigDecimal.ZERO;
     }
-  }
 
-  // Posting type enum
-  public enum PostingType {
-    DEBIT, CREDIT
-  }
+    public void setAmountDecimal(BigDecimal amount) {
+        this.amountCents = amount != null ? amount.movePointRight(2).longValue() : 0L;
+    }
+
+    public boolean isDebit() {
+        return debitAccount != null;
+    }
+
+    public boolean isCredit() {
+        return creditAccount != null;
+    }
+
+    public boolean isValid() {
+        // A posting must be either debit OR credit, not both or neither
+        return (debitAccount != null) ^ (creditAccount != null);
+    }
+
+    public String getFormattedAmount() {
+        if (amountCents == null)
+            return "0.00";
+        return String.format("%.2f", amountCents / 100.0);
+    }
+
+    public String getAmountWithCurrency() {
+        return String.format("%s %s", getFormattedAmount(), currency);
+    }
+
+    // Business methods
+    public Account getAccount() {
+        return debitAccount != null ? debitAccount : creditAccount;
+    }
+
+    public String getPostingType() {
+        if (isDebit())
+            return "DEBIT";
+        if (isCredit())
+            return "CREDIT";
+        return "INVALID";
+    }
+
+    public String getPostingSummary() {
+        Account account = getAccount();
+        String accountName = account != null ? account.getAccountName() : "Unknown";
+        return String.format("%s %s: %s", getPostingType(), accountName, getAmountWithCurrency());
+    }
+
+    // Factory methods for common posting types
+    public static Posting debit(Account account, Long amountCents, String currency, String description) {
+        return Posting.builder()
+                .debitAccount(account)
+                .amountCents(amountCents)
+                .currency(currency)
+                .description(description)
+                .build();
+    }
+
+    public static Posting credit(Account account, Long amountCents, String currency, String description) {
+        return Posting.builder()
+                .creditAccount(account)
+                .amountCents(amountCents)
+                .currency(currency)
+                .description(description)
+                .build();
+    }
+
+    // Validation methods
+    public void validatePosting() {
+        if (!isValid()) {
+            throw new IllegalStateException("Posting must have either debit or credit account, not both or neither");
+        }
+
+        if (amountCents == null || amountCents <= 0) {
+            throw new IllegalStateException("Posting amount must be positive");
+        }
+
+        if (currency == null || currency.trim().isEmpty()) {
+            throw new IllegalStateException("Posting currency is required");
+        }
+
+        Account account = getAccount();
+        if (account != null && !account.getCurrency().equals(currency)) {
+            throw new IllegalStateException("Posting currency must match account currency");
+        }
+    }
 }
