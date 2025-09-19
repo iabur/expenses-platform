@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableAsync
 @EnableScheduling
 public class SvcSettlementApplication {
-    
-    public static void main(String[] args) {
-        SpringApplication.run(SvcSettlementApplication.class, args);
-    }
+
+  public static void main(String[] args) {
+    SpringApplication.run(SvcSettlementApplication.class, args);
+  }
 }

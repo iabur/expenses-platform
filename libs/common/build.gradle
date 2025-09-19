@@ -15,13 +15,14 @@ dependencies {
   api 'org.springframework:spring-messaging'
   api 'com.fasterxml.jackson.core:jackson-annotations'
   api 'com.fasterxml.jackson.core:jackson-databind'
-  
+  api libs.springdoc.openapi.starter
+
   compileOnly libs.lombok
   annotationProcessor libs.lombok
-  
+
   implementation 'org.slf4j:slf4j-api'
   implementation libs.spring.boot.starter.validation
-  
+
   testImplementation libs.junit.jupiter
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
