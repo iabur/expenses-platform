@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.expenses.svcuser.entity.User;
 import com.expenses.svcuser.entity.UserPreferences;
+import com.expenses.svcuser.exception.UserNotFoundException;
 import com.expenses.svcuser.repository.UserRepository;
 
 @Service
@@ -79,7 +80,7 @@ public class UserService {
   public User updateProfile(UUID userId, String firstName, String lastName,
       String displayName, String defaultCurrency, String locale, String timezone) {
     User user = userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+        .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 
     if (firstName != null)
       user.setFirstName(firstName);
@@ -103,7 +104,7 @@ public class UserService {
   public User updatePreferences(UUID userId, UserPreferences.DigestFrequency digestFrequency,
       Boolean notificationEmail, Boolean notificationPush, Boolean notificationSms) {
     User user = userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+        .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 
     UserPreferences preferences = user.getPreferences();
     if (preferences == null) {
@@ -147,7 +148,7 @@ public class UserService {
    */
   public void deactivateUser(UUID userId) {
     User user = userRepository.findById(userId)
-        .orElseThrow(() -> new RuntimeException("User not found"));
+        .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 
     user.setIsActive(false);
     userRepository.save(user);

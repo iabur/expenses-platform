@@ -10,8 +10,10 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import lombok.extern.slf4j.Slf4j;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @RestControllerAdvice
 @Slf4j
@@ -81,6 +83,21 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
   }
 
+  @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+  public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+    log.warn("Type mismatch: {}", ex.getMessage());
+
+    ErrorResponse error = ErrorResponse.builder()
+        .timestamp(ZonedDateTime.now())
+        .status(HttpStatus.BAD_REQUEST.value())
+        .error("Invalid Request")
+        .message(String.format("Parameter '%s' with value '%s' could not be converted to %s", ex.getName(), ex.getValue(),
+            ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "the required type"))
+        .build();
+
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
     log.error("Unexpected error occurred", ex);
@@ -96,12 +113,24 @@ public class GlobalExceptionHandler {
   }
 
   // Error response record
+  @Schema(name = "ErrorResponse", description = "Standardized error model used across the service.")
   public record ErrorResponse(
+      @Schema(description = "Timestamp when the error occurred.", example = "2024-02-01T12:45:00Z")
       ZonedDateTime timestamp,
+
+      @Schema(description = "HTTP status code associated with the failure.", example = "404")
       int status,
+
+      @Schema(description = "Short classification of the problem.", example = "User Not Found")
       String error,
+
+      @Schema(description = "Human-readable explanation of the failure.", example = "User does not exist")
       String message,
+
+      @Schema(description = "Request path that triggered the error.", example = "/user/me", nullable = true)
       String path,
+
+      @Schema(description = "Field-level validation messages when available.", example = "{\"email\":\"must be a well-formed email address\"}", nullable = true)
       Map<String, String> details) {
     public static ErrorResponseBuilder builder() {
       return new ErrorResponseBuilder();

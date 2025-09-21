@@ -14,7 +14,7 @@ All API endpoints require JWT authentication except health checks.
 
 #### Get JWT Token
 ```bash
-curl -X POST http://localhost:8081/realms/expenses/protocol/openid-connect/token \
+curl -X POST http://localhost:8090/realms/expenses/protocol/openid-connect/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password&client_id=web&username=alice@example.com&password=password"
 ```
@@ -397,9 +397,13 @@ X-RateLimit-Reset: 1640995200
 - **OpenAPI JSON:** http://localhost:8080/v3/api-docs
 
 ### Service-Specific Docs
-- **User Service:** http://localhost:8084/swagger-ui/index.html
+- **User Service:** http://localhost:8081/swagger-ui/index.html
 - **Group Service:** http://localhost:8082/swagger-ui/index.html
 - **Expense Service:** http://localhost:8083/swagger-ui/index.html
+- **Split Engine:** http://localhost:8084/swagger-ui/index.html
+- **Settlement Service:** http://localhost:8085/swagger-ui/index.html
+- **FX Service:** http://localhost:8086/swagger-ui/index.html
+- **Ledger Service:** http://localhost:8087/swagger-ui/index.html
 
 ---
 

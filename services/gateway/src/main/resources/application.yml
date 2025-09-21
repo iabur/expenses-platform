@@ -40,28 +40,28 @@ spring:
         # The following service API docs routes remain to proxy to downstream services
 
         - id: user-api-docs
-          uri: http://svc-user:8080
+          uri: http://svc-user:8081
           predicates:
             - Path=/v3/api-docs/users
           filters:
             - RewritePath=/v3/api-docs/users, /v3/api-docs
 
         - id: group-api-docs
-          uri: http://svc-group:8080
+          uri: http://svc-group:8082
           predicates:
             - Path=/v3/api-docs/groups
           filters:
             - RewritePath=/v3/api-docs/groups, /v3/api-docs
 
         - id: expense-api-docs
-          uri: http://svc-expense:8080
+          uri: http://svc-expense:8083
           predicates:
             - Path=/v3/api-docs/expenses
           filters:
             - RewritePath=/v3/api-docs/expenses, /v3/api-docs
 
         - id: ledger-api-docs
-          uri: http://svc-ledger:8080
+          uri: http://svc-ledger:8087
           predicates:
             - Path=/v3/api-docs/ledger
           filters:
@@ -82,7 +82,7 @@ spring:
             - RewritePath=/v3/api-docs/split-engine, /v3/api-docs
 
         - id: fx-api-docs
-          uri: http://svc-fx:8080
+          uri: http://svc-fx:8086
           predicates:
             - Path=/v3/api-docs/fx
           filters:
@@ -173,19 +173,19 @@ spring:
           simple:
             instances:
               svc-user:
-                - uri: http://svc-user:8080
+                - uri: http://svc-user:8081
               svc-group:
-                - uri: http://svc-group:8080
+                - uri: http://svc-group:8082
               svc-expense:
-                - uri: http://svc-expense:8080
+                - uri: http://svc-expense:8083
               svc-ledger:
-                - uri: http://svc-ledger:8080
+                - uri: http://svc-ledger:8087
               svc-settlement:
-                - uri: http://svc-settlement:8080
+                - uri: http://svc-settlement:8085
               svc-split-engine:
-                - uri: http://svc-split-engine:8080
+                - uri: http://svc-split-engine:8084
               svc-fx:
-                - uri: http://svc-fx:8080
+                - uri: http://svc-fx:8086
     circuitbreaker:
       resilience4j:
         enabled: true
