@@ -76,6 +76,19 @@ management:
       prometheus:
         enabled: true
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    display-request-duration: true
+    filter: true
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    enabled: true
+    groups:
+      enabled: true
+
 # Logging Configuration
 logging:
   level:

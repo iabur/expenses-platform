@@ -102,6 +102,19 @@ app:
       max-per-group: 10
       auto-create-enabled: true
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    display-request-duration: true
+    filter: true
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    enabled: true
+    groups:
+      enabled: true
+
 ---
 # Docker profile
 spring:

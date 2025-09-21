@@ -26,3 +26,16 @@ spring:
         jwt:
           issuer-uri: http://keycloak:8080/realms/expenses
 management.endpoints.web.exposure.include: health,info,prometheus
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    display-request-duration: true
+    filter: true
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    enabled: true
+    groups:
+      enabled: true

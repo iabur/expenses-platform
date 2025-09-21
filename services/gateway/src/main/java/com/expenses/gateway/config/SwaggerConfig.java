@@ -15,21 +15,12 @@ import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
 import reactor.core.publisher.Mono;
 
 @Configuration
 public class SwaggerConfig {
 
-        @Bean
-        public OpenAPI expensesPlatformAPI() {
-                return new OpenAPI()
-                                .info(new Info()
-                                                .title("Expenses Platform API")
-                                                .description("API documentation for Expenses Platform Microservices")
-                                                .version("1.0.0"));
-        }
+        private static final String SECURITY_SCHEME_NAME = "bearerAuth";
 
         @Bean
         @Primary
