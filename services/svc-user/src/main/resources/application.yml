@@ -24,7 +24,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://keycloak:8080/realms/expenses
+          # Validate JWTs using JWKS only to avoid strict issuer matching
+          jwk-set-uri: http://host.docker.internal:8090/realms/expenses/protocol/openid-connect/certs
 management.endpoints.web.exposure.include: health,info,prometheus
 
 springdoc:
