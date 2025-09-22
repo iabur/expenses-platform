@@ -1,33 +1,119 @@
+# =============================================================================
+# User Service Configuration
+# =============================================================================
+# This configuration file contains all settings for the User Service including
+# server, database, security, messaging, and API documentation settings.
+
+# -----------------------------------------------------------------------------
+# Server Configuration
+# -----------------------------------------------------------------------------
 server:
   port: 8081
+  servlet:
+    context-path: /
+
+# -----------------------------------------------------------------------------
+# Spring Application Configuration
+# -----------------------------------------------------------------------------
 spring:
   application:
     name: svc-user
+
+  # -------------------------------------------------------------------------
+  # Database Configuration
+  # -------------------------------------------------------------------------
   datasource:
     url: jdbc:postgresql://pg-user:5432/userdb
     username: user
     password: user
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # -------------------------------------------------------------------------
+  # JPA/Hibernate Configuration
+  # -------------------------------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: false
     properties:
-      hibernate.jdbc.time_zone: UTC
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: true
+        use_sql_comments: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # -------------------------------------------------------------------------
+  # Database Migration (Flyway)
+  # -------------------------------------------------------------------------
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # -------------------------------------------------------------------------
+  # Kafka Messaging Configuration
+  # -------------------------------------------------------------------------
   kafka:
     bootstrap-servers: kafka:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+    consumer:
+      group-id: svc-user-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+  # -------------------------------------------------------------------------
+  # Security Configuration (OAuth2 Resource Server)
+  # -------------------------------------------------------------------------
   security:
     oauth2:
       resourceserver:
         jwt:
-          # Validate JWTs using JWKS only to avoid strict issuer matching
+          # JWT validation using JWKS endpoint
+          # This approach avoids strict issuer matching issues
           jwk-set-uri: http://host.docker.internal:8090/realms/expenses/protocol/openid-connect/certs
-management.endpoints.web.exposure.include: health,info,prometheus
+          # Optional: Custom claim validation
+          # issuer-uri: http://host.docker.internal:8090/realms/expenses
 
+# -----------------------------------------------------------------------------
+# Actuator Configuration (Health Checks & Metrics)
+# -----------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  info:
+    env:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# -----------------------------------------------------------------------------
+# SpringDoc OpenAPI Configuration
+# -----------------------------------------------------------------------------
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -36,7 +122,25 @@ springdoc:
     filter: true
     tags-sorter: alpha
     operations-sorter: method
+    try-it-out-enabled: true
+    request-snippets-enabled: true
   api-docs:
     enabled: true
     groups:
       enabled: true
+    path: /v3/api-docs
+  show-actuator: false
+
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging:
+  level:
+    com.expenses.svcuser: INFO
+    org.springframework.security: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
