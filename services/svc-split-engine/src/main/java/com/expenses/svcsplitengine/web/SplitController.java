@@ -3,8 +3,6 @@ package com.expenses.svcsplitengine.web;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.validation.Valid;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -28,6 +26,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -73,13 +72,15 @@ public class SplitController {
   @ApiResponse(responseCode = "200", description = "Group balances retrieved successfully")
   @ApiResponse(responseCode = "403", description = "Not authorized to view group balances")
   @ApiResponse(responseCode = "404", description = "Group not found")
-  public ResponseEntity<Page<GroupBalance>> getGroupBalances(
+  public ResponseEntity<List<GroupBalance>> getGroupBalances(
       @Parameter(description = "Group ID") @PathVariable UUID groupId,
-      @PageableDefault(size = 50) Pageable pageable,
       Authentication authentication) {
 
-    // TODO: Fix method signature in service
-    Page<GroupBalance> balances = Page.empty(pageable);
+    log.info("Getting balances for group: {}", groupId);
+
+    List<GroupBalance> balances = balanceUpdateService.getGroupBalances(groupId);
+
+    log.info("Found {} balances for group {}", balances.size(), groupId);
 
     return ResponseEntity.ok(balances);
   }

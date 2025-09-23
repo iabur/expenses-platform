@@ -37,21 +37,40 @@ public class BalanceUpdateService {
         .sum();
 
     // For each participant, update their balance
-    // Assumption: The person who paid the expense should be credited
-    // and all participants should be debited for their share
-
+    // Each participant owes their split amount (debit)
     for (ExpenseEvent.SplitInfo split : splits) {
-      // Each participant owes their split amount
       updateUserBalance(groupId, split.getUserId(), currency,
           -split.getAmountCents(), expenseId);
     }
 
-    // Note: We need to know who paid the expense to credit them
-    // This information should come from the expense event
-    // For now, we'll handle the credit separately when we have payer info
-
     log.info("Successfully updated balances for {} participants in group {}",
         splits.size(), groupId);
+  }
+
+  /**
+   * Update group balances from expense creation (includes crediting payer)
+   */
+  public void updateBalancesFromExpense(UUID groupId, UUID expenseId, UUID paidBy,
+      List<ExpenseEvent.SplitInfo> splits, String currency) {
+    log.info("Updating balances for group {} from expense {} paid by {} with {} splits",
+        groupId, expenseId, paidBy, splits.size());
+
+    // Calculate total expense amount
+    Long totalExpenseAmount = splits.stream()
+        .mapToLong(ExpenseEvent.SplitInfo::getAmountCents)
+        .sum();
+
+    // Credit the payer for the full expense amount
+    updateUserBalance(groupId, paidBy, currency, totalExpenseAmount, expenseId);
+
+    // Debit each participant for their split amount
+    for (ExpenseEvent.SplitInfo split : splits) {
+      updateUserBalance(groupId, split.getUserId(), currency,
+          -split.getAmountCents(), expenseId);
+    }
+
+    log.info("Successfully updated balances: credited {} cents to payer {}, debited {} participants",
+        totalExpenseAmount, paidBy, splits.size());
   }
 
   /**

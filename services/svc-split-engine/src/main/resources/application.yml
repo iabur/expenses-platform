@@ -34,17 +34,20 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      enable-auto-commit: false
       properties:
         spring.json.trusted.packages: "com.expenses.common.event"
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    listener:
+      ack-mode: manual_immediate
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/expenses
+          jwk-set-uri: http://host.docker.internal:8090/realms/expenses/protocol/openid-connect/certs
 
 management:
   endpoints:
@@ -86,9 +89,13 @@ spring:
 
   kafka:
     bootstrap-servers: kafka:9092
+    consumer:
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://keycloak:8080/realms/expenses
+          jwk-set-uri: http://host.docker.internal:8090/realms/expenses/protocol/openid-connect/certs

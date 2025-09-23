@@ -1,15 +1,14 @@
 package com.expenses.svcsplitengine.event;
 
+import java.util.List;
+import java.util.UUID;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import com.expenses.common.event.BaseEventHandler;
 import com.expenses.common.event.DomainEvent;
-import com.expenses.common.event.EventHandler;
 import com.expenses.common.event.ExpenseEvent;
 import com.expenses.svcsplitengine.dto.SplitRequest;
 import com.expenses.svcsplitengine.service.BalanceUpdateService;
@@ -26,14 +25,12 @@ public class ExpenseEventHandler extends BaseEventHandler {
   private final SplitCalculationService splitCalculationService;
   private final BalanceUpdateService balanceUpdateService;
 
-  @EventHandler(topics = "expense-events", groupId = "split-engine-service", eventTypes = {
-      ExpenseEvent.ExpenseCreated.class, ExpenseEvent.ExpenseSplitsCalculated.class })
-  public void handleExpenseEvents(@Payload DomainEvent event,
-      @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
-      @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
-      @Header(KafkaHeaders.OFFSET) long offset,
-      ConsumerRecord<String, DomainEvent> record,
-      Acknowledgment acknowledgment) {
+  @org.springframework.kafka.annotation.KafkaListener(topics = "expense-events", groupId = "split-engine-service")
+  public void handleExpenseEvents(ConsumerRecord<String, DomainEvent> record, Acknowledgment acknowledgment) {
+    DomainEvent event = record.value();
+    String topic = record.topic();
+    int partition = record.partition();
+    long offset = record.offset();
 
     handleEvent(event, topic, partition, offset, record, acknowledgment);
   }
@@ -62,14 +59,36 @@ public class ExpenseEventHandler extends BaseEventHandler {
         // Create split request from expense event
         SplitRequest splitRequest = createSplitRequestFromExpense(event);
 
-        // Calculate splits
-        splitCalculationService.calculateSplits(splitRequest);
+        // Calculate splits and immediately update balances with the correct payer
+        // We do this here because we have access to the original expense creator
+        UUID paidBy = event.getCreatedBy();
+        log.info("Expense {} was paid by: {}", event.getAggregateId(), paidBy);
 
-        log.info("Successfully triggered split calculation for expense: {}",
+        // Calculate splits
+        var splitResult = splitCalculationService.calculateSplits(splitRequest);
+
+        // Convert SplitResult to SplitInfo list for balance update
+        List<com.expenses.common.event.ExpenseEvent.SplitInfo> splits = splitResult.participantSplits().stream()
+            .map(ps -> com.expenses.common.event.ExpenseEvent.SplitInfo.builder()
+                .userId(ps.userId())
+                .amountCents(ps.calculatedAmountCents())
+                .currency(ps.currency())
+                .build())
+            .collect(java.util.stream.Collectors.toList());
+
+        // Update balances immediately with the correct payer
+        balanceUpdateService.updateBalancesFromExpense(
+            event.getGroupId(),
+            event.getAggregateId(),
+            paidBy,
+            splits,
+            event.getCurrency());
+
+        log.info("Successfully processed expense creation and updated balances for expense: {}",
             event.getAggregateId());
 
       } catch (Exception e) {
-        log.error("Failed to calculate splits for expense {}: {}",
+        log.error("Failed to process expense creation for expense {}: {}",
             event.getAggregateId(), e.getMessage(), e);
         // Don't rethrow - we'll handle this as a failed calculation
       }
@@ -81,26 +100,16 @@ public class ExpenseEventHandler extends BaseEventHandler {
 
   /**
    * Handle expense splits calculated - update group balances
+   * NOTE: We now handle balance updates directly in handleExpenseCreated
+   * to ensure we have access to the correct payer information
    */
   private void handleExpenseSplitsCalculated(ExpenseEvent.ExpenseSplitsCalculated event) {
-    log.info("Processing expense splits calculated event for expense: {}",
+    log.info("Received expense splits calculated event for expense: {} - skipping as balances already updated",
         event.getAggregateId());
 
-    try {
-      // Update group balances based on calculated splits
-      balanceUpdateService.updateBalancesFromSplits(
-          event.getGroupId(),
-          event.getAggregateId(),
-          event.getSplits(),
-          event.getCurrency());
-
-      log.info("Successfully updated balances for expense: {}", event.getAggregateId());
-
-    } catch (Exception e) {
-      log.error("Failed to update balances for expense {}: {}",
-          event.getAggregateId(), e.getMessage(), e);
-      throw e; // Rethrow to trigger retry/DLQ
-    }
+    // We no longer process this event because we handle everything in
+    // handleExpenseCreated
+    // where we have access to the original expense creator (payer) information
   }
 
   /**
