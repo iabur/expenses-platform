@@ -51,19 +51,16 @@ public class ExpenseController {
           {
             "id": "expense-123",
             "groupId": "550e8400-e29b-41d4-a716-446655440000",
-            "title": "Dinner at Restaurant",
-            "description": "Group dinner with friends",
+            "creatorId": "123e4567-e89b-12d3-a456-426614174000",
+            "paidBy": "123e4567-e89b-12d3-a456-426614174000",
             "amountCents": 8500,
             "currency": "USD",
             "category": "FOOD",
-            "splitMethod": "EQUAL",
-            "createdBy": "123e4567-e89b-12d3-a456-426614174000",
             "createdAt": "2024-01-15T10:30:00Z",
             "participants": [
               {
                 "userId": "123e4567-e89b-12d3-a456-426614174000",
-                "amountOwedCents": 2125,
-                "isPaid": false
+                "ruleType": "EQUAL"
               }
             ]
           }

@@ -43,10 +43,22 @@ public class ExpenseService {
 
     log.info("Creating expense for group {} by user {}", request.groupId(), currentUserId);
 
+    // Validate paidBy if provided: must be among participants (basic guard for
+    // group membership)
+    if (request.paidBy() != null) {
+      boolean payerInParticipants = request.participants() != null &&
+          request.participants().stream().anyMatch(p -> p.userId().equals(request.paidBy()));
+      if (!payerInParticipants) {
+        throw new IllegalArgumentException("paidBy user must be included in participants for this expense");
+      }
+    }
+
     // Create expense entity
     Expense expense = new Expense();
     expense.setGroupId(request.groupId());
     expense.setCreatorId(currentUserId);
+    // Set paidBy: default to creator if not provided
+    expense.setPaidBy(request.paidBy() != null ? request.paidBy() : currentUserId);
     expense.setCurrency(request.currency());
     expense.setAmountDecimal(request.amount());
     expense.setOccurredAt(request.occurredAt());
@@ -117,6 +129,15 @@ public class ExpenseService {
     if (!canModifyExpense(expense, currentUserId)) {
       throw new UnauthorizedExpenseAccessException("You don't have permission to modify this expense");
     }
+
+    // Prevent changing paidBy (immutable after creation)
+    // NOTE: UpdateExpenseRequest has no paidBy field by design. If added in future,
+    // enforce immutability here.
+    // if (request.paidBy() != null &&
+    // !request.paidBy().equals(expense.getPaidBy())) {
+    // throw new IllegalArgumentException("paidBy cannot be changed once the expense
+    // is created");
+    // }
 
     // Update basic fields
     expense.setCurrency(request.currency());

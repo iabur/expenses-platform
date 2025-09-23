@@ -1,18 +1,27 @@
 package com.expenses.svcexpense.entity;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 
 @Entity
 @Table(name = "expenses")
@@ -29,6 +38,10 @@ public class Expense {
   @Column(name = "creator_id", nullable = false)
   @NotNull(message = "Creator ID is required")
   private UUID creatorId;
+
+  @Column(name = "paid_by", nullable = false)
+  @NotNull(message = "PaidBy is required")
+  private UUID paidBy;
 
   @Column(length = 3, nullable = false)
   @NotBlank(message = "Currency is required")
@@ -109,6 +122,14 @@ public class Expense {
 
   public void setCreatorId(UUID creatorId) {
     this.creatorId = creatorId;
+  }
+
+  public UUID getPaidBy() {
+    return paidBy;
+  }
+
+  public void setPaidBy(UUID paidBy) {
+    this.paidBy = paidBy;
   }
 
   public String getCurrency() {

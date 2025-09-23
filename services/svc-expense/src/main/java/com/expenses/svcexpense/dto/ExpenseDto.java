@@ -34,6 +34,7 @@ public class ExpenseDto {
       UUID id,
       UUID groupId,
       UUID creatorId,
+      UUID paidBy,
       String currency,
       Long amountCents,
       BigDecimal amount,
@@ -54,6 +55,7 @@ public class ExpenseDto {
           .id(expense.getId())
           .groupId(expense.getGroupId())
           .creatorId(expense.getCreatorId())
+          .paidBy(expense.getPaidBy())
           .currency(expense.getCurrency())
           .amountCents(expense.getAmountCents())
           .amount(expense.getAmountDecimal())
@@ -239,6 +241,7 @@ public class ExpenseDto {
       UUID id,
       UUID groupId,
       UUID creatorId,
+      UUID paidBy,
       String currency,
       BigDecimal amount,
       LocalDate occurredAt,
@@ -252,6 +255,7 @@ public class ExpenseDto {
           .id(expense.getId())
           .groupId(expense.getGroupId())
           .creatorId(expense.getCreatorId())
+          .paidBy(expense.getPaidBy())
           .currency(expense.getCurrency())
           .amount(expense.getAmountDecimal())
           .occurredAt(expense.getOccurredAt())
