@@ -51,10 +51,11 @@ public abstract class ExpenseEvent extends DomainEvent {
     private String note;
     private String category;
     private UUID createdBy;
+    private UUID paidBy;
     private List<ParticipantInfo> participants;
 
     public ExpenseCreated(UUID expenseId, UUID groupId, String currency, Long amountCents,
-        LocalDate occurredAt, String note, String category, UUID createdBy,
+        LocalDate occurredAt, String note, String category, UUID createdBy, UUID paidBy,
         List<ParticipantInfo> participants) {
       super("EXPENSE_CREATED", expenseId);
       this.groupId = groupId;
@@ -64,6 +65,7 @@ public abstract class ExpenseEvent extends DomainEvent {
       this.note = note;
       this.category = category;
       this.createdBy = createdBy;
+      this.paidBy = paidBy;
       this.participants = participants;
       setCausedBy(createdBy);
     }

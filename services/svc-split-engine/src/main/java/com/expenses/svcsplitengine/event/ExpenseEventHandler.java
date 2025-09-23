@@ -60,8 +60,8 @@ public class ExpenseEventHandler extends BaseEventHandler {
         SplitRequest splitRequest = createSplitRequestFromExpense(event);
 
         // Calculate splits and immediately update balances with the correct payer
-        // We do this here because we have access to the original expense creator
-        UUID paidBy = event.getCreatedBy();
+        // Prefer explicit paidBy if provided, otherwise fallback to creator
+        UUID paidBy = event.getPaidBy() != null ? event.getPaidBy() : event.getCreatedBy();
         log.info("Expense {} was paid by: {}", event.getAggregateId(), paidBy);
 
         // Calculate splits

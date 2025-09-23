@@ -77,7 +77,7 @@ public class ExpenseService {
     Expense savedExpense = expenseRepository.save(expense);
 
     // Publish expense created event
-    publishExpenseCreatedEvent(savedExpense);
+    publishExpenseCreatedEvent(savedExpense, request.paidBy());
 
     log.info("Created expense {} for group {}", savedExpense.getId(), request.groupId());
 
@@ -282,7 +282,7 @@ public class ExpenseService {
     return expense.getCreatorId().equals(userId);
   }
 
-  private void publishExpenseCreatedEvent(Expense expense) {
+  private void publishExpenseCreatedEvent(Expense expense, UUID paidByOverride) {
     List<ExpenseEvent.ParticipantInfo> participants = expense.getParticipants().stream()
         .map(p -> ExpenseEvent.ParticipantInfo.builder()
             .userId(p.getUserId())
@@ -290,6 +290,8 @@ public class ExpenseService {
             .splitRuleValue(p.getRuleValue())
             .build())
         .collect(java.util.stream.Collectors.toList());
+
+    UUID paidBy = paidByOverride != null ? paidByOverride : expense.getCreatorId();
 
     ExpenseEvent.ExpenseCreated event = new ExpenseEvent.ExpenseCreated(
         expense.getId(),
@@ -300,6 +302,7 @@ public class ExpenseService {
         expense.getNote(),
         expense.getCategory(),
         expense.getCreatorId(),
+        paidBy,
         participants);
 
     eventPublisher.publishEventAsync(event);

@@ -6,6 +6,11 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import com.expenses.svcexpense.entity.Expense;
+import com.expenses.svcexpense.entity.ExpenseAttachment;
+import com.expenses.svcexpense.entity.ExpenseLineItem;
+import com.expenses.svcexpense.entity.ExpenseParticipant;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -14,12 +19,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-
-import com.expenses.svcexpense.entity.Expense;
-import com.expenses.svcexpense.entity.ExpenseAttachment;
-import com.expenses.svcexpense.entity.ExpenseLineItem;
-import com.expenses.svcexpense.entity.ExpenseParticipant;
-
 import lombok.Builder;
 
 /**
@@ -98,7 +97,10 @@ public class ExpenseDto {
 
       @NotEmpty(message = "At least one participant is required") @Valid List<ParticipantRequest> participants,
 
-      @Valid List<LineItemRequest> lineItems) {
+      @Valid List<LineItemRequest> lineItems,
+
+      // Optional: allow setting a payee different from creator
+      UUID paidBy) {
   }
 
   /**
