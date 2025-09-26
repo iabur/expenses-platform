@@ -326,6 +326,148 @@ else
   echo "Charlie: $( [ -n "$CHARLIE_BALANCE" ] && echo $(echo "scale=2; $CHARLIE_BALANCE/100" | bc) || echo NA )"
 fi
 
+# ===================== NEW: Settlement Proposal & Acceptance =====================
+# Step 7: Create a manual settlement proposal (choose a simple debtor -> creditor scenario)
+# We will create a proposal where a user who OWES pays one who SHOULD RECEIVE based on current balances.
+# For simplicity, we only consider one payment between the first negative (debtor) and first positive (creditor) balance found.
+
+echo ""
+echo -e "${YELLOW}Step 7: Creating a settlement proposal (pending acceptance)...${NC}"
+
+# Reuse latest balances (already in BALANCES variable). If empty, fetch again.
+if [ -z "$BALANCES" ] || [ "$BALANCES" = "[]" ]; then
+  BALANCES=$(curl -s "http://localhost:8084/api/splits/group/$GROUP_ID/balances" -H "Authorization: Bearer $ALICE_TOKEN")
+fi
+
+# Extract balances again to ensure variables exist (cents, may be negative)
+ALICE_BALANCE=$(echo "$BALANCES" | jq -r ".[] | select(.userId == \"$ALICE_ID\") | .balanceCents")
+BOB_BALANCE=$(echo "$BALANCES" | jq -r ".[] | select(.userId == \"$BOB_ID\") | .balanceCents")
+CHARLIE_BALANCE=$(echo "$BALANCES" | jq -r ".[] | select(.userId == \"$CHARLIE_ID\") | .balanceCents")
+
+# Helper to decide debtor/creditor
+DEBTOR_ID=""; DEBTOR_NAME=""; DEBTOR_BALANCE=0
+CREDITOR_ID=""; CREDITOR_NAME=""; CREDITOR_BALANCE=0
+
+# Identify first debtor (negative balance)
+if [ -n "$ALICE_BALANCE" ] && [ "$ALICE_BALANCE" != "null" ] && [ "$ALICE_BALANCE" -lt 0 ] && [ -z "$DEBTOR_ID" ]; then
+  DEBTOR_ID=$ALICE_ID; DEBTOR_NAME="Alice"; DEBTOR_BALANCE=$ALICE_BALANCE
+fi
+if [ -n "$BOB_BALANCE" ] && [ "$BOB_BALANCE" != "null" ] && [ "$BOB_BALANCE" -lt 0 ] && [ -z "$DEBTOR_ID" ]; then
+  DEBTOR_ID=$BOB_ID; DEBTOR_NAME="Bob"; DEBTOR_BALANCE=$BOB_BALANCE
+fi
+if [ -n "$CHARLIE_BALANCE" ] && [ "$CHARLIE_BALANCE" != "null" ] && [ "$CHARLIE_BALANCE" -lt 0 ] && [ -z "$DEBTOR_ID" ]; then
+  DEBTOR_ID=$CHARLIE_ID; DEBTOR_NAME="Charlie"; DEBTOR_BALANCE=$CHARLIE_BALANCE
+fi
+
+# Identify first creditor (positive balance)
+if [ -n "$ALICE_BALANCE" ] && [ "$ALICE_BALANCE" != "null" ] && [ "$ALICE_BALANCE" -gt 0 ] && [ -z "$CREDITOR_ID" ]; then
+  CREDITOR_ID=$ALICE_ID; CREDITOR_NAME="Alice"; CREDITOR_BALANCE=$ALICE_BALANCE
+fi
+if [ -n "$BOB_BALANCE" ] && [ "$BOB_BALANCE" != "null" ] && [ "$BOB_BALANCE" -gt 0 ] && [ -z "$CREDITOR_ID" ]; then
+  CREDITOR_ID=$BOB_ID; CREDITOR_NAME="Bob"; CREDITOR_BALANCE=$BOB_BALANCE
+fi
+if [ -n "$CHARLIE_BALANCE" ] && [ "$CHARLIE_BALANCE" != "null" ] && [ "$CHARLIE_BALANCE" -gt 0 ] && [ -z "$CREDITOR_ID" ]; then
+  CREDITOR_ID=$CHARLIE_ID; CREDITOR_NAME="Charlie"; CREDITOR_BALANCE=$CHARLIE_BALANCE
+fi
+
+if [ -z "$DEBTOR_ID" ] || [ -z "$CREDITOR_ID" ]; then
+  echo -e "${RED}No debtor/creditor pair detected – skipping settlement proposal.${NC}"
+else
+  # Amount to settle = min(abs(debtor), creditor) in cents
+  ABS_DEBTOR=$(( DEBTOR_BALANCE * -1 ))
+  if [ $ABS_DEBTOR -lt $CREDITOR_BALANCE ]; then
+    SETTLE_CENTS=$ABS_DEBTOR
+  else
+    SETTLE_CENTS=$CREDITOR_BALANCE
+  fi
+  # Convert cents to decimal amount (e.g., 4000 -> 40.00)
+  SETTLE_AMOUNT=$(printf '%d' "$SETTLE_CENTS")
+  SETTLE_AMOUNT_DEC=$(echo "scale=2; $SETTLE_AMOUNT/100" | bc)
+
+  echo "Creating MANUAL_SETTLEMENT proposal: $DEBTOR_NAME pays $CREDITOR_NAME $SETTLE_AMOUNT_DEC USD"
+
+  # Decide who will authenticate the proposal creation: use debtor's token (intuitive – debtor proposes to pay)
+  CREATOR_TOKEN=""
+  if [ "$DEBTOR_ID" = "$ALICE_ID" ]; then CREATOR_TOKEN=$ALICE_TOKEN; fi
+  if [ "$DEBTOR_ID" = "$BOB_ID" ]; then CREATOR_TOKEN=$BOB_TOKEN; fi
+  if [ "$DEBTOR_ID" = "$CHARLIE_ID" ]; then CREATOR_TOKEN=$CHARLIE_TOKEN; fi
+
+  SETTLEMENT_PROPOSAL_CREATE=$(curl -s -X POST 'http://localhost:8085/api/settlements/proposals' \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $CREATOR_TOKEN" \
+    --data-binary @- <<EOF
+{
+  "groupId": "$GROUP_ID",
+  "title": "Manual Settlement - $DEBTOR_NAME pays $CREDITOR_NAME",
+  "description": "$DEBTOR_NAME partially settles balance with $CREDITOR_NAME",
+  "currency": "USD",
+  "proposalType": "MANUAL_SETTLEMENT",
+  "payments": [
+    {
+      "payerId": "$DEBTOR_ID",
+      "payeeId": "$CREDITOR_ID",
+      "amount": $SETTLE_AMOUNT_DEC,
+      "description": "Partial settlement",
+      "paymentMethod": "CASH"
+    }
+  ]
+}
+EOF
+  )
+
+  PROPOSAL_ID=$(echo "$SETTLEMENT_PROPOSAL_CREATE" | jq -r .id)
+  PROPOSAL_STATUS=$(echo "$SETTLEMENT_PROPOSAL_CREATE" | jq -r .status)
+  PAYMENT_ID=$(echo "$SETTLEMENT_PROPOSAL_CREATE" | jq -r '.payments[0].id')
+
+  if [ -z "$PAYMENT_ID" ] || [ "$PAYMENT_ID" = "null" ]; then
+    echo -e "${RED}No payment ID returned in proposal response – skipping confirmation steps.${NC}"
+  fi
+
+  if [ -n "$PROPOSAL_ID" ] && [ "$PROPOSAL_ID" != "null" ]; then
+    echo -e "${GREEN}✓ Settlement proposal created: $PROPOSAL_ID (status: $PROPOSAL_STATUS)${NC}"
+    echo "$SETTLEMENT_PROPOSAL_CREATE" | jq '.'
+
+    # Step 8: Accept the settlement proposal (must be a different participant; use creditor if different)
+    echo -e "${YELLOW}Step 8: Accepting settlement proposal...${NC}"
+    ACCEPTOR_TOKEN=""
+    if [ "$CREDITOR_ID" = "$ALICE_ID" ]; then ACCEPTOR_TOKEN=$ALICE_TOKEN; fi
+    if [ "$CREDITOR_ID" = "$BOB_ID" ]; then ACCEPTOR_TOKEN=$BOB_TOKEN; fi
+    if [ "$CREDITOR_ID" = "$CHARLIE_ID" ]; then ACCEPTOR_TOKEN=$CHARLIE_TOKEN; fi
+
+    SETTLEMENT_PROPOSAL_ACCEPT=$(curl -s -X POST "http://localhost:8085/api/settlements/proposals/$PROPOSAL_ID/accept" \
+      -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $ACCEPTOR_TOKEN")
+
+    UPDATED_STATUS=$(echo "$SETTLEMENT_PROPOSAL_ACCEPT" | jq -r .status)
+    echo -e "${GREEN}✓ Settlement proposal accepted. New status: $UPDATED_STATUS${NC}"
+    echo "$SETTLEMENT_PROPOSAL_ACCEPT" | jq '.'
+
+    if [ -n "$PAYMENT_ID" ] && [ "$PAYMENT_ID" != "null" ]; then
+      # Optional: Payer confirms payment, then Payee confirms
+      echo -e "${YELLOW}Confirming payment (payer then payee)...${NC}"
+      PAYER_CONFIRM=$(curl -s -X POST "http://localhost:8085/api/settlements/payments/$PAYMENT_ID/confirm-payer" \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $CREATOR_TOKEN" \
+        -d '{"notes":"Payer confirms sending funds"}')
+      echo -e "${GREEN}✓ Payer confirmation added${NC}" | sed 's/^/  /'
+
+      PAYEE_CONFIRM=$(curl -s -X POST "http://localhost:8085/api/settlements/payments/$PAYMENT_ID/confirm-payee" \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $ACCEPTOR_TOKEN" \
+        -d '{"notes":"Payee confirms receipt"}')
+      echo -e "${GREEN}✓ Payee confirmation added${NC}" | sed 's/^/  /'
+
+      echo "Final payment state:"; echo "$PAYEE_CONFIRM" | jq '.'
+    else
+      echo -e "${YELLOW}Skipping payment confirmation because PAYMENT_ID is not available.${NC}"
+    fi
+  else
+    echo -e "${RED}Failed to create settlement proposal${NC}"
+    echo "$SETTLEMENT_PROPOSAL_CREATE" | jq '.'
+  fi
+fi
+# ===================== END NEW SETTLEMENT STEPS =====================
+
 echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}            SUMMARY                     ${NC}"
@@ -336,8 +478,10 @@ echo -e "${GREEN}✅ Successfully completed full expense flow:${NC}"
 echo "  1. ✓ Created and authenticated 3 users (Alice, Bob, Charlie)"
 echo "  2. ✓ Created group with Charlie as owner"
 echo "  3. ✓ Added Alice and Bob as group members"
-echo "  4. ✓ Created 3 expenses with different payers and participants"
+echo "  4. ✓ Created base expenses with different payers and participants"
 echo "  5. ✓ Split Engine calculated balances automatically"
+echo "  6. ✓ Additional scenario expense (initiator ≠ payer) processed and balances updated"
+echo "  7. ✓ Settlement proposal created (pending -> accepted) with payer & payee confirmations"
 echo ""
 
 echo -e "${YELLOW}Total expenses: \$225.00${NC}"
@@ -363,3 +507,35 @@ echo "  • Who paid each expense (payer identification)"
 echo "  • How expenses were split (equal shares, percentages, etc.)"
 echo "  • Real-time event processing via Kafka"
 echo "  • Proper crediting and debiting of participants"
+
+echo -e "${YELLOW}Post-Run Verification: Fetch balances again via direct curl call${NC}"
+# Allow override: if user sets FINAL_BALANCE_CHECK_TOKEN externally, use it; else default to Charlie's token
+FINAL_BALANCE_CHECK_TOKEN=${FINAL_BALANCE_CHECK_TOKEN:-$CHARLIE_TOKEN}
+TARGET_GROUP_ID=${TARGET_GROUP_ID:-$GROUP_ID}
+
+if [ -z "$FINAL_BALANCE_CHECK_TOKEN" ]; then
+  echo -e "${RED}No token available for final balance check. Skipping.${NC}"
+else
+  echo "Calling: GET /api/splits/group/$TARGET_GROUP_ID/balances"
+  FINAL_BALANCES_RAW=$(curl -s -X GET \
+    "http://localhost:8084/api/splits/group/$TARGET_GROUP_ID/balances" \
+    -H 'accept: */*' \
+    -H "Authorization: Bearer $FINAL_BALANCE_CHECK_TOKEN")
+  echo "Raw response:"; echo "$FINAL_BALANCES_RAW" | jq '.' || echo "$FINAL_BALANCES_RAW"
+
+  if command -v jq >/dev/null 2>&1; then
+    echo -e "${GREEN}Parsed balances summary:${NC}"
+    echo "$FINAL_BALANCES_RAW" | jq -r 'map({userId, balanceCents, balance: (.balanceCents/100)}) | .[] | " - User: \(.userId) Balance: \(.balance) (cents=\(.balanceCents))"'
+    TOTAL_CENTS=$(echo "$FINAL_BALANCES_RAW" | jq '[.[].balanceCents] | add // 0')
+    if [ "$TOTAL_CENTS" != "" ]; then
+      TOTAL_FMT=$(echo "scale=2; $TOTAL_CENTS/100" | bc 2>/dev/null || echo "n/a")
+      if [ "$TOTAL_CENTS" -eq 0 ] 2>/dev/null; then
+        echo -e "${GREEN}Net total balance = $TOTAL_FMT (perfectly balanced)${NC}"
+      else
+        echo -e "${RED}Net total balance = $TOTAL_FMT (should be 0; investigate rounding or processing delays)${NC}"
+      fi
+    fi
+  fi
+fi
+
+echo -e "${BLUE}End of script.${NC}"

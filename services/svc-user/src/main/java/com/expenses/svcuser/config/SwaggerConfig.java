@@ -13,6 +13,10 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.ObjectSchema;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
@@ -56,13 +60,15 @@ public class SwaggerConfig {
   @Bean
   public OpenApiCustomizer globalResponsesCustomiser() {
     return openApi -> openApi.getPaths().values().forEach(pathItem -> pathItem.readOperations().forEach(operation -> {
+      Content errorContent = new Content().addMediaType("application/json",
+          new MediaType().schema(new Schema<>().$ref("#/components/schemas/ErrorResponse")));
       operation.getResponses()
-          .addApiResponse("401", new ApiResponse()
-              .description("Unauthorized - missing or invalid JWT token"))
-          .addApiResponse("403", new ApiResponse()
-              .description("Forbidden - insufficient privileges"))
-          .addApiResponse("500", new ApiResponse()
-              .description("Internal server error"));
+          .addApiResponse("400", new ApiResponse().description("Bad Request - validation error").content(errorContent))
+          .addApiResponse("401", new ApiResponse().description("Unauthorized - missing or invalid JWT token").content(errorContent))
+          .addApiResponse("403", new ApiResponse().description("Forbidden - insufficient privileges").content(errorContent))
+          .addApiResponse("404", new ApiResponse().description("Not Found").content(errorContent))
+          .addApiResponse("409", new ApiResponse().description("Conflict - resource state issue").content(errorContent))
+          .addApiResponse("500", new ApiResponse().description("Internal server error").content(errorContent));
     }));
   }
 
@@ -71,6 +77,16 @@ public class SwaggerConfig {
    */
   @Bean
   public OpenAPI userServiceOpenAPI() {
+    Schema<?> errorSchema = new ObjectSchema()
+        .addProperty("timestamp", new StringSchema().example("2025-09-27T10:15:30Z"))
+        .addProperty("path", new StringSchema().example("/user/me"))
+        .addProperty("status", new StringSchema().example("401"))
+        .addProperty("error", new StringSchema().example("Unauthorized"))
+        .addProperty("message", new StringSchema().example("JWT expired"))
+        .addProperty("traceId", new StringSchema().example("trace-abc123"))
+        .addProperty("requestId", new StringSchema().example("req-12345"))
+        .description("Standard error format");
+
     return new OpenAPI()
         .info(new Info()
             .title(SERVICE_NAME)
@@ -94,7 +110,8 @@ public class SwaggerConfig {
                     .type(Type.HTTP)
                     .scheme("bearer")
                     .bearerFormat("JWT")
-                    .description("JWT token from Keycloak")))
+                    .description("JWT token from Keycloak"))
+            .addSchemas("ErrorResponse", errorSchema))
         .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME));
   }
 
@@ -111,6 +128,12 @@ public class SwaggerConfig {
           .required(false)
           .schema(new StringSchema()
               .example("req-12345-67890")));
+      operation.addParametersItem(new Parameter()
+          .in("header")
+          .name("X-Idempotency-Key")
+          .description("Provide for idempotent create/update operations")
+          .required(false)
+          .schema(new StringSchema().example("4f6d5c2b-9a10-4e7d-8dd0-123456789abc")));
       return operation;
     };
   }

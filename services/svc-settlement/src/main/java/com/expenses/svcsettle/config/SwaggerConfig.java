@@ -13,6 +13,10 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.ObjectSchema;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
@@ -54,6 +58,16 @@ public class SwaggerConfig {
    */
   @Bean
   public OpenAPI settlementServiceOpenAPI() {
+    Schema<?> errorSchema = new ObjectSchema()
+        .addProperty("timestamp", new StringSchema().example("2025-09-27T10:15:30Z"))
+        .addProperty("path", new StringSchema().example("/api/settlements/proposals"))
+        .addProperty("status", new StringSchema().example("400"))
+        .addProperty("error", new StringSchema().example("Bad Request"))
+        .addProperty("message", new StringSchema().example("Proposal cannot be accepted in current state"))
+        .addProperty("traceId", new StringSchema().example("trace-settlement-1"))
+        .addProperty("requestId", new StringSchema().example("req-settle-123"))
+        .description("Standard error format returned by settlement service operations");
+
     return new OpenAPI()
         .info(new Info()
             .title(SERVICE_NAME)
@@ -77,7 +91,8 @@ public class SwaggerConfig {
                     .type(Type.HTTP)
                     .scheme("bearer")
                     .bearerFormat("JWT")
-                    .description("JWT token from Keycloak")))
+                    .description("JWT token from Keycloak"))
+            .addSchemas("ErrorResponse", errorSchema))
         .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME));
   }
 
@@ -87,13 +102,21 @@ public class SwaggerConfig {
   @Bean
   public OpenApiCustomizer globalResponsesCustomiser() {
     return openApi -> openApi.getPaths().values().forEach(pathItem -> pathItem.readOperations().forEach(operation -> {
+      Content errorContent = new Content().addMediaType("application/json",
+          new MediaType().schema(new Schema<>().$ref("#/components/schemas/ErrorResponse")));
       operation.getResponses()
+          .addApiResponse("400", new ApiResponse()
+              .description("Bad Request - validation/business rule failure").content(errorContent))
           .addApiResponse("401", new ApiResponse()
-              .description("Unauthorized - missing or invalid JWT token"))
+              .description("Unauthorized - missing or invalid JWT token").content(errorContent))
           .addApiResponse("403", new ApiResponse()
-              .description("Forbidden - insufficient privileges"))
+              .description("Forbidden - insufficient privileges").content(errorContent))
+          .addApiResponse("404", new ApiResponse()
+              .description("Not Found - resource does not exist").content(errorContent))
+          .addApiResponse("409", new ApiResponse()
+              .description("Conflict - state transition not allowed").content(errorContent))
           .addApiResponse("500", new ApiResponse()
-              .description("Internal server error"));
+              .description("Internal server error").content(errorContent));
     }));
   }
 
@@ -110,6 +133,12 @@ public class SwaggerConfig {
           .required(false)
           .schema(new StringSchema()
               .example("req-12345-67890")));
+      operation.addParametersItem(new Parameter()
+          .in("header")
+          .name("X-Idempotency-Key")
+          .description("Optional idempotency key for proposal creation (UUID recommended)")
+          .required(false)
+          .schema(new StringSchema().example("0f4c1b1e-9d6a-4e1c-8b2d-1234567890ab")));
       return operation;
     };
   }

@@ -80,7 +80,10 @@ public class SettlementService {
 
     settlementPaymentRepository.saveAll(payments);
 
-    log.info("Created settlement proposal {} for group {}", savedProposal.getId(), request.groupId());
+    // Attach payments to proposal entity so response includes them (the owning side is SettlementPayment)
+    payments.forEach(p -> savedProposal.getPayments().add(p));
+
+    log.info("Created settlement proposal {} for group {} with {} payments", savedProposal.getId(), request.groupId(), payments.size());
 
     return SettlementDto.SettlementProposalResponse.from(savedProposal);
   }
