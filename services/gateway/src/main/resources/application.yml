@@ -190,14 +190,14 @@ spring:
                 - uri: http://svc-group:8082
               svc-expense:
                 - uri: http://svc-expense:8083
-              svc-ledger:
-                - uri: http://svc-ledger:8087
-              svc-settlement:
-                - uri: http://svc-settlement:8085
               svc-split-engine:
                 - uri: http://svc-split-engine:8084
+              svc-settlement:
+                - uri: http://svc-settlement:8085
               svc-fx:
                 - uri: http://svc-fx:8086
+              svc-ledger:
+                - uri: http://svc-ledger:8087
     circuitbreaker:
       resilience4j:
         enabled: true

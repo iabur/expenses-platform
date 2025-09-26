@@ -1,5 +1,7 @@
 package com.expenses.svcsettle.service;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -11,11 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.expenses.svcsettle.dto.SettlementDto;
+import com.expenses.svcsettle.entity.SettlementPayment;
 import com.expenses.svcsettle.entity.SettlementProposal;
 import com.expenses.svcsettle.exception.SettlementNotFoundException;
 import com.expenses.svcsettle.exception.UnauthorizedSettlementAccessException;
-import com.expenses.svcsettle.repository.SettlementProposalRepository;
 import com.expenses.svcsettle.repository.SettlementPaymentRepository;
+import com.expenses.svcsettle.repository.SettlementProposalRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +45,11 @@ public class SettlementService {
 
     // TODO: Verify user is member of the group
 
+    // Calculate total amount from payments first
+    long totalAmountCents = request.payments().stream()
+        .mapToLong(paymentRequest -> paymentRequest.amount().multiply(BigDecimal.valueOf(100)).longValue())
+        .sum();
+
     SettlementProposal proposal = SettlementProposal.builder()
         .groupId(request.groupId())
         .proposerId(currentUserId)
@@ -50,11 +58,27 @@ public class SettlementService {
         .currency(request.currency())
         .proposalType(request.proposalType())
         .expiresAt(request.expiresAt())
+        .totalAmountCents(totalAmountCents)
         .build();
 
-    // TODO: Add payments from request
-
     SettlementProposal savedProposal = settlementProposalRepository.save(proposal);
+
+    // Add payments from request
+    final SettlementProposal finalProposal = savedProposal;
+    List<SettlementPayment> payments = request.payments().stream()
+        .map(paymentRequest -> SettlementPayment.builder()
+            .proposal(finalProposal)
+            .payerId(paymentRequest.payerId())
+            .payeeId(paymentRequest.payeeId())
+            .currency(request.currency())
+            .amountCents(paymentRequest.amount().multiply(BigDecimal.valueOf(100)).longValue())
+            .description(paymentRequest.description())
+            .paymentMethod(paymentRequest.paymentMethod())
+            .status(SettlementPayment.PaymentStatus.PENDING)
+            .build())
+        .toList();
+
+    settlementPaymentRepository.saveAll(payments);
 
     log.info("Created settlement proposal {} for group {}", savedProposal.getId(), request.groupId());
 
@@ -226,14 +250,27 @@ public class SettlementService {
 
     UUID currentUserId = getCurrentUserId(authentication);
 
-    // TODO: Implement payment confirmation logic
+    SettlementPayment payment = settlementPaymentRepository.findById(paymentId)
+        .orElseThrow(() -> new SettlementNotFoundException("Payment not found: " + paymentId));
+
+    // Verify user is the payer
+    if (!payment.getPayerId().equals(currentUserId)) {
+      throw new IllegalArgumentException("Only the payer can confirm payment");
+    }
+
+    // Confirm payment by payer
+    payment.confirmByPayer(currentUserId, request.notes(), request.attachmentUrl());
+
+    // Update payment reference if provided
+    if (request.paymentReference() != null && !request.paymentReference().trim().isEmpty()) {
+      payment.setPaymentReference(request.paymentReference());
+    }
+
+    SettlementPayment savedPayment = settlementPaymentRepository.save(payment);
 
     log.info("Payment {} confirmed by payer {}", paymentId, currentUserId);
 
-    // Return placeholder response
-    return SettlementDto.SettlementPaymentResponse.builder()
-        .id(paymentId)
-        .build();
+    return SettlementDto.SettlementPaymentResponse.from(savedPayment);
   }
 
   /**
@@ -246,14 +283,25 @@ public class SettlementService {
 
     UUID currentUserId = getCurrentUserId(authentication);
 
-    // TODO: Implement payment confirmation logic
+    SettlementPayment payment = settlementPaymentRepository.findById(paymentId)
+        .orElseThrow(() -> new SettlementNotFoundException("Payment not found: " + paymentId));
+
+    // Verify user is the payee
+    if (!payment.getPayeeId().equals(currentUserId)) {
+      throw new IllegalArgumentException("Only the payee can confirm payment receipt");
+    }
+
+    // Confirm payment by payee
+    payment.confirmByPayee(currentUserId, request.notes());
+
+    SettlementPayment savedPayment = settlementPaymentRepository.save(payment);
+
+    // Check if all payments in the proposal are completed
+    checkAndUpdateProposalCompletion(payment.getProposal().getId());
 
     log.info("Payment {} confirmed by payee {}", paymentId, currentUserId);
 
-    // Return placeholder response
-    return SettlementDto.SettlementPaymentResponse.builder()
-        .id(paymentId)
-        .build();
+    return SettlementDto.SettlementPaymentResponse.from(savedPayment);
   }
 
   /**
@@ -284,10 +332,24 @@ public class SettlementService {
       Authentication authentication) {
     UUID currentUserId = getCurrentUserId(authentication);
 
-    // TODO: Implement payment retrieval logic
+    Page<SettlementPayment> payments;
 
-    // Return empty page as placeholder
-    return Page.empty(pageable);
+    if (status != null && !status.trim().isEmpty()) {
+      // Filter by specific status
+      try {
+        SettlementPayment.PaymentStatus paymentStatus = SettlementPayment.PaymentStatus.valueOf(status.toUpperCase());
+        payments = settlementPaymentRepository.findByUserInvolvement(currentUserId, pageable)
+            .map(payment -> payment.getStatus() == paymentStatus ? payment : null)
+            .map(payment -> payment != null ? payment : null);
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("Invalid payment status: " + status);
+      }
+    } else {
+      // Get all payments for user
+      payments = settlementPaymentRepository.findByUserInvolvement(currentUserId, pageable);
+    }
+
+    return payments.map(SettlementDto.SettlementPaymentResponse::from);
   }
 
   /**
@@ -318,5 +380,25 @@ public class SettlementService {
       return UUID.fromString(jwt.getSubject());
     }
     throw new IllegalArgumentException("Invalid authentication type");
+  }
+
+  /**
+   * Check if all payments in a proposal are completed and update proposal status
+   */
+  private void checkAndUpdateProposalCompletion(UUID proposalId) {
+    SettlementProposal proposal = settlementProposalRepository.findById(proposalId)
+        .orElseThrow(() -> new SettlementNotFoundException("Settlement proposal not found: " + proposalId));
+
+    // Check if all payments are completed
+    boolean allPaymentsCompleted = proposal.getPayments().stream()
+        .allMatch(payment -> payment.getStatus() == SettlementPayment.PaymentStatus.COMPLETED);
+
+    if (allPaymentsCompleted && proposal.getStatus() == SettlementProposal.SettlementStatus.ACCEPTED) {
+      // Update proposal status to COMPLETED
+      proposal.setStatus(SettlementProposal.SettlementStatus.COMPLETED);
+      settlementProposalRepository.save(proposal);
+
+      log.info("Settlement proposal {} marked as completed - all payments finished", proposalId);
+    }
   }
 }
