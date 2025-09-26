@@ -136,6 +136,18 @@ spring:
                 redis-rate-limiter.replenishRate: 20
                 redis-rate-limiter.burstCapacity: 40
 
+        # Settlement Service Routes
+        - id: svc-settlement
+          uri: lb://svc-settlement
+          predicates:
+            - Path=/api/settlements/**
+          filters:
+            - RewritePath=/api/settlements/(?<segment>.*), /api/settlements/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+
         # Ledger Service Routes (Internal only)
         - id: svc-ledger
           uri: lb://svc-ledger
