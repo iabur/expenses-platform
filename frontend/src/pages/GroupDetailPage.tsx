@@ -7,13 +7,13 @@ export default function GroupDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Group Details</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Group Details</h1>
         <p className="text-gray-500 mt-1">
           Group ID: {groupId}
         </p>
       </div>
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Coming Soon</CardTitle>
           <CardDescription>

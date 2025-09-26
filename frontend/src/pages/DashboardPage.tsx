@@ -49,16 +49,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Welcome back, {user?.name || 'User'}!
           </h1>
           <p className="text-gray-600 mt-1">
             Here's what's happening with your expenses today.
           </p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
             <Link to="/groups">
               <Plus className="w-4 h-4 mr-2" />
