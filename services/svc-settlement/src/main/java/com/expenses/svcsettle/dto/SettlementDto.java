@@ -311,4 +311,58 @@ public class SettlementDto {
       BigDecimal amount,
       String description) {
   }
+
+  /**
+   * Group settlement status and debt summary
+   */
+  @Builder
+  public record GroupSettlementStatus(
+      UUID groupId,
+      String currency,
+      BigDecimal totalDebtAmount,
+      BigDecimal totalSettledAmount,
+      BigDecimal remainingDebtAmount,
+      Integer activeProposalsCount,
+      Integer completedProposalsCount,
+      Integer pendingPaymentsCount,
+      Integer completedPaymentsCount,
+      Integer disputedPaymentsCount,
+      List<DebtSummary> debtSummary,
+      List<SettlementProposalSummary> activeProposals,
+      ZonedDateTime lastSettlementAt,
+      ZonedDateTime calculatedAt) {
+  }
+
+  /**
+   * Debt summary for a user in a group
+   */
+  @Builder
+  public record DebtSummary(
+      UUID userId,
+      BigDecimal totalOwed,
+      BigDecimal totalOwing,
+      BigDecimal netBalance,
+      Integer activeDebtsCount,
+      Integer activeCreditsCount) {
+  }
+
+  /**
+   * Settlement history item for audit trail
+   */
+  @Builder
+  public record SettlementHistoryItem(
+      UUID id,
+      String type, // "PROPOSAL", "PAYMENT", "CONFIRMATION", "DISPUTE"
+      String action, // "CREATED", "ACCEPTED", "REJECTED", "COMPLETED", "CONFIRMED", "DISPUTED"
+      UUID groupId,
+      UUID proposalId,
+      UUID paymentId,
+      UUID userId,
+      String description,
+      BigDecimal amount,
+      String currency,
+      String status,
+      ZonedDateTime timestamp,
+      String metadata) {
+  }
 }
