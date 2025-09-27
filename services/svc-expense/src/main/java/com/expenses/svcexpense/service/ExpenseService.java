@@ -43,6 +43,11 @@ public class ExpenseService {
 
     log.info("Creating expense for group {} by user {}", request.groupId(), currentUserId);
 
+    // Verify user is member of the group
+    if (!isUserMemberOfGroup(request.groupId(), currentUserId)) {
+      throw new UnauthorizedExpenseAccessException("You must be a member of the group to create expenses");
+    }
+
     // Validate paidBy if provided: must be among participants (basic guard for
     // group membership)
     if (request.paidBy() != null) {
@@ -213,7 +218,10 @@ public class ExpenseService {
       Authentication authentication) {
     UUID currentUserId = getCurrentUserId(authentication);
 
-    // TODO: Verify user is member of the group
+    // Verify user is member of the group
+    if (!isUserMemberOfGroup(groupId, currentUserId)) {
+      throw new UnauthorizedExpenseAccessException("You must be a member of the group to view its expenses");
+    }
 
     return expenseRepository.findByGroupIdAndIsDeletedFalseOrderByCreatedAtDesc(groupId, pageable)
         .map(ExpenseDto.ExpenseSummary::from);
@@ -254,7 +262,10 @@ public class ExpenseService {
     UUID currentUserId = getCurrentUserId(authentication);
 
     if (groupId != null) {
-      // TODO: Verify user is member of the group
+      // Verify user is member of the group
+      if (!isUserMemberOfGroup(groupId, currentUserId)) {
+        throw new UnauthorizedExpenseAccessException("You must be a member of the group to search its expenses");
+      }
       return expenseRepository.searchInGroup(query, groupId, pageable)
           .map(ExpenseDto.ExpenseSummary::from);
     } else {
@@ -270,7 +281,10 @@ public class ExpenseService {
   public ExpenseStatistics getGroupExpenseStatistics(UUID groupId, Authentication authentication) {
     UUID currentUserId = getCurrentUserId(authentication);
 
-    // TODO: Verify user is member of the group
+    // Verify user is member of the group
+    if (!isUserMemberOfGroup(groupId, currentUserId)) {
+      throw new UnauthorizedExpenseAccessException("You must be a member of the group to view its expense statistics");
+    }
 
     Long totalCount = expenseRepository.countByGroupIdAndIsDeletedFalse(groupId);
     BigDecimal totalAmount = expenseRepository.sumAmountByGroupId(groupId);
@@ -291,16 +305,46 @@ public class ExpenseService {
 
   private boolean hasExpenseAccess(Expense expense, UUID userId) {
     // User has access if they are the creator or a participant
-    // TODO: Also check if user is member of the group
-    return expense.getCreatorId().equals(userId) ||
+    boolean isCreatorOrParticipant = expense.getCreatorId().equals(userId) ||
         expense.getParticipants().stream()
             .anyMatch(p -> p.getUserId().equals(userId));
+    
+    // Also check if user is member of the group
+    boolean isGroupMember = isUserMemberOfGroup(expense.getGroupId(), userId);
+    
+    return isCreatorOrParticipant && isGroupMember;
   }
 
   private boolean canModifyExpense(Expense expense, UUID userId) {
-    // Only creator can modify for now
-    // TODO: Also allow group admins to modify
-    return expense.getCreatorId().equals(userId);
+    // Creator can always modify
+    if (expense.getCreatorId().equals(userId)) {
+      return true;
+    }
+    
+    // Also allow group admins to modify
+    return isUserGroupAdmin(expense.getGroupId(), userId);
+  }
+
+  /**
+   * Check if user is a member of the group
+   * TODO: Integrate with actual group service when available
+   */
+  private boolean isUserMemberOfGroup(UUID groupId, UUID userId) {
+    // Placeholder implementation - always returns true for testing
+    // In production, this should call the group service to verify membership
+    log.debug("Checking group membership for user {} in group {} (placeholder: always true)", userId, groupId);
+    return true;
+  }
+
+  /**
+   * Check if user is a group admin
+   * TODO: Integrate with actual group service when available
+   */
+  private boolean isUserGroupAdmin(UUID groupId, UUID userId) {
+    // Placeholder implementation - always returns false for testing
+    // In production, this should call the group service to check admin status
+    log.debug("Checking admin status for user {} in group {} (placeholder: always false)", userId, groupId);
+    return false;
   }
 
   private void publishExpenseCreatedEvent(Expense expense, UUID paidByOverride) {
