@@ -15,10 +15,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.expenses.svcsplitengine.dto.DebtSummary;
+import com.expenses.svcsplitengine.dto.OptimizedDebtResult;
 import com.expenses.svcsplitengine.dto.SplitRequest;
 import com.expenses.svcsplitengine.dto.SplitResult;
 import com.expenses.svcsplitengine.entity.GroupBalance;
-import com.expenses.svcsplitengine.entity.SplitCalculation;
 import com.expenses.svcsplitengine.service.BalanceUpdateService;
 import com.expenses.svcsplitengine.service.SplitCalculationService;
 
@@ -51,18 +52,7 @@ public class SplitController {
 
     log.info("Calculating split for expense: {}", request.expenseId());
 
-    // TODO: Implement calculateSplit method in service
-    SplitResult result = SplitResult.builder()
-        .calculationId(UUID.randomUUID())
-        .expenseId(request.expenseId())
-        .groupId(request.groupId())
-        .totalAmountCents(request.totalAmountCents())
-        .currency(request.currency())
-        .splitMethod(request.splitMethod())
-        .status(SplitCalculation.CalculationStatus.PENDING)
-        .calculatedAt(java.time.ZonedDateTime.now())
-        .participantSplits(List.of())
-        .build();
+    SplitResult result = splitCalculationService.calculateSplits(request);
 
     return ResponseEntity.ok(result);
   }
@@ -95,8 +85,7 @@ public class SplitController {
       @PageableDefault(size = 20) Pageable pageable,
       Authentication authentication) {
 
-    // TODO: Implement getUserBalances method in service
-    Page<GroupBalance> balances = Page.empty(pageable);
+    Page<GroupBalance> balances = balanceUpdateService.getUserBalances(userId, pageable);
 
     return ResponseEntity.ok(balances);
   }
@@ -106,13 +95,15 @@ public class SplitController {
   @ApiResponse(responseCode = "200", description = "Group debts retrieved successfully")
   @ApiResponse(responseCode = "403", description = "Not authorized to view group debts")
   @ApiResponse(responseCode = "404", description = "Group not found")
-  public ResponseEntity<List<Object>> getGroupDebts(
+  public ResponseEntity<List<DebtSummary>> getGroupDebts(
       @Parameter(description = "Group ID") @PathVariable UUID groupId,
       Authentication authentication) {
 
-    // This would return simplified debt relationships
-    // For now, return empty list as placeholder
-    return ResponseEntity.ok(List.of());
+    log.info("Getting debt summary for group: {}", groupId);
+
+    List<DebtSummary> debts = balanceUpdateService.getGroupDebts(groupId);
+
+    return ResponseEntity.ok(debts);
   }
 
   @PostMapping("/group/{groupId}/optimize")
@@ -120,14 +111,14 @@ public class SplitController {
   @ApiResponse(responseCode = "200", description = "Debt optimization calculated successfully")
   @ApiResponse(responseCode = "403", description = "Not authorized to optimize group debts")
   @ApiResponse(responseCode = "404", description = "Group not found")
-  public ResponseEntity<Object> optimizeGroupDebts(
+  public ResponseEntity<OptimizedDebtResult> optimizeGroupDebts(
       @Parameter(description = "Group ID") @PathVariable UUID groupId,
       Authentication authentication) {
 
     log.info("Optimizing debts for group: {}", groupId);
 
-    // This would calculate and return optimized debt settlement
-    // For now, return empty object as placeholder
-    return ResponseEntity.ok(new Object());
+    OptimizedDebtResult result = balanceUpdateService.optimizeGroupDebts(groupId);
+
+    return ResponseEntity.ok(result);
   }
 }
