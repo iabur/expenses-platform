@@ -37,6 +37,24 @@
       "realmRoles": [
         "default-roles-expenses"
       ]
+    },
+    {
+      "username": "charlie@example.com",
+      "enabled": true,
+      "firstName": "Charlie",
+      "lastName": "Wilson",
+      "email": "charlie@example.com",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-expenses"
+      ]
     }
   ],
   "clients": [

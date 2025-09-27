@@ -129,6 +129,7 @@ EXPENSE1=$(curl -s -X POST 'http://localhost:8083/api/expenses' \
     \"occurredAt\": \"2025-09-22\",
     \"note\": \"Dinner at Le Jules Verne\",
     \"category\": \"FOOD\",
+    \"paidBy\": \"$ALICE_ID\",
     \"participants\": [
       {\"userId\": \"$ALICE_ID\", \"ruleType\": \"EQUAL\"},
       {\"userId\": \"$BOB_ID\", \"ruleType\": \"EQUAL\"},
@@ -153,6 +154,7 @@ EXPENSE2=$(curl -s -X POST 'http://localhost:8083/api/expenses' \
     \"occurredAt\": \"2025-09-22\",
     \"note\": \"Louvre Museum tickets\",
     \"category\": \"ENTERTAINMENT\",
+    \"paidBy\": \"$BOB_ID\",
     \"participants\": [
       {\"userId\": \"$BOB_ID\", \"ruleType\": \"EQUAL\"},
       {\"userId\": \"$CHARLIE_ID\", \"ruleType\": \"EQUAL\"}
@@ -176,6 +178,7 @@ EXPENSE3=$(curl -s -X POST 'http://localhost:8083/api/expenses' \
     \"occurredAt\": \"2025-09-22\",
     \"note\": \"Taxi to/from airport\",
     \"category\": \"TRANSPORT\",
+    \"paidBy\": \"$CHARLIE_ID\",
     \"participants\": [
       {\"userId\": \"$ALICE_ID\", \"ruleType\": \"EQUAL\"},
       {\"userId\": \"$BOB_ID\", \"ruleType\": \"EQUAL\"},
