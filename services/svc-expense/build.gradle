@@ -18,6 +18,9 @@ dependencies {
   // Common library for events
   implementation project(':libs:common')
   
+  // OpenFeign for HTTP clients
+  implementation(libs.spring.cloud.starter.openfeign)
+  
   // Lombok
   compileOnly(libs.lombok)
   annotationProcessor(libs.lombok)

@@ -27,6 +27,22 @@ spring:
           jwk-set-uri: http://keycloak:8080/realms/expenses/protocol/openid-connect/certs
 management.endpoints.web.exposure.include: health,info,prometheus
 
+# Feign configuration
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+        loggerLevel: basic
+  circuitbreaker:
+    enabled: true
+
+# Service URLs
+services:
+  group:
+    url: http://svc-group:8082
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

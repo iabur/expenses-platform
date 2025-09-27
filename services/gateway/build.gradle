@@ -2,12 +2,6 @@ plugins {
   alias(libs.plugins.spring.boot)
 }
 
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${libs.versions.spring.cloud.get()}"
-    }
-}
-
 dependencies {
   implementation(libs.spring.boot.starter.webflux)
   implementation(libs.spring.boot.starter.actuator)
@@ -21,13 +15,13 @@ dependencies {
   implementation(libs.spring.boot.starter.data.redis.reactive)
   
   // Circuit Breaker
-  implementation('org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j')
+  implementation(libs.spring.cloud.starter.circuitbreaker.reactor.resilience4j)
   
   // Load Balancer
-  implementation('org.springframework.cloud:spring-cloud-starter-loadbalancer')
+  implementation(libs.spring.cloud.starter.loadbalancer)
   
   // Monitoring & Observability
-  implementation('io.micrometer:micrometer-registry-prometheus')
+  implementation(libs.micrometer.registry.prometheus)
   
   // Common library for events
   implementation project(':libs:common')

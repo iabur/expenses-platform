@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.expenses.common.event.EventPublisher;
 import com.expenses.common.event.ExpenseEvent;
+import com.expenses.svcexpense.client.GroupServiceClient;
 import com.expenses.svcexpense.dto.ExpenseDto;
 import com.expenses.svcexpense.entity.Expense;
 import com.expenses.svcexpense.entity.ExpenseLineItem;
@@ -33,6 +34,7 @@ public class ExpenseService {
 
   private final ExpenseRepository expenseRepository;
   private final EventPublisher eventPublisher;
+  private final GroupServiceClient groupServiceClient;
 
   /**
    * Create a new expense
@@ -327,24 +329,18 @@ public class ExpenseService {
 
   /**
    * Check if user is a member of the group
-   * TODO: Integrate with actual group service when available
    */
   private boolean isUserMemberOfGroup(UUID groupId, UUID userId) {
-    // Placeholder implementation - always returns true for testing
-    // In production, this should call the group service to verify membership
-    log.debug("Checking group membership for user {} in group {} (placeholder: always true)", userId, groupId);
-    return true;
+    log.debug("Checking group membership for user {} in group {}", userId, groupId);
+    return groupServiceClient.isUserMemberOfGroup(groupId, userId);
   }
 
   /**
    * Check if user is a group admin
-   * TODO: Integrate with actual group service when available
    */
   private boolean isUserGroupAdmin(UUID groupId, UUID userId) {
-    // Placeholder implementation - always returns false for testing
-    // In production, this should call the group service to check admin status
-    log.debug("Checking admin status for user {} in group {} (placeholder: always false)", userId, groupId);
-    return false;
+    log.debug("Checking admin status for user {} in group {}", userId, groupId);
+    return groupServiceClient.isUserAdminOfGroup(groupId, userId);
   }
 
   private void publishExpenseCreatedEvent(Expense expense, UUID paidByOverride) {

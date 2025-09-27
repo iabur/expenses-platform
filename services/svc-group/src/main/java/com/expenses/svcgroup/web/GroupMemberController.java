@@ -13,10 +13,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.expenses.svcgroup.dto.GroupMemberDto;
 import com.expenses.svcgroup.service.GroupMemberService;
+import com.expenses.svcgroup.service.GroupService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -214,5 +216,37 @@ class UserMembershipController {
 
     List<GroupMemberDto> memberships = groupMemberService.getUserMemberships(authentication);
     return ResponseEntity.ok(memberships);
+  }
+}
+
+/**
+ * Internal API endpoints for service-to-service communication
+ */
+@RestController
+@RequestMapping("/groups/{groupId}")
+@RequiredArgsConstructor
+@Tag(name = "Group Internal API", description = "Internal endpoints for service-to-service communication")
+class GroupInternalController {
+
+  private final GroupService groupService;
+
+  @GetMapping("/members/check")
+  @Operation(summary = "Check if user is member", description = "Internal endpoint to check if a user is a member of the group")
+  public ResponseEntity<Boolean> checkMembership(
+      @PathVariable UUID groupId,
+      @RequestParam UUID userId) {
+    
+    boolean isMember = groupService.isUserMemberOfGroup(groupId, userId);
+    return ResponseEntity.ok(isMember);
+  }
+
+  @GetMapping("/admin/check")
+  @Operation(summary = "Check if user is admin", description = "Internal endpoint to check if a user is an admin of the group")
+  public ResponseEntity<Boolean> checkAdminStatus(
+      @PathVariable UUID groupId,
+      @RequestParam UUID userId) {
+    
+    boolean isAdmin = groupService.isUserAdminOfGroup(groupId, userId);
+    return ResponseEntity.ok(isAdmin);
   }
 }
