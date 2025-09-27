@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.expenses.svcsettle.client.GroupServiceClient;
 import com.expenses.svcsettle.dto.SettlementDto;
 import com.expenses.svcsettle.entity.SettlementPayment;
 import com.expenses.svcsettle.entity.SettlementProposal;
@@ -38,6 +39,7 @@ public class SettlementService {
   private final SettlementProposalRepository settlementProposalRepository;
   private final SettlementPaymentRepository settlementPaymentRepository;
   private final SettlementHistoryService settlementHistoryService;
+  private final GroupServiceClient groupServiceClient;
 
   /**
    * Create a new settlement proposal
@@ -566,7 +568,7 @@ public class SettlementService {
 
     return SettlementDto.GroupSettlementStatus.builder()
         .groupId(groupId)
-        .currency("USD") // TODO: Get from group
+        .currency(getGroupCurrency(groupId))
         .totalDebtAmount(totalDebtAmount)
         .totalSettledAmount(totalSettledAmount)
         .remainingDebtAmount(remainingDebtAmount)
@@ -772,14 +774,19 @@ public class SettlementService {
   }
 
   /**
-   * Check if user is member of group (placeholder implementation)
-   * TODO: Integrate with group service when available
+   * Check if user is member of group using Group Service
    */
   private boolean isUserMemberOfGroup(UUID groupId, UUID userId) {
-    // For now, return true to allow testing
-    // In production, this should call the group service
-    log.warn("Group membership verification not implemented - allowing access for testing");
-    return true;
+    log.debug("Checking group membership for user {} in group {}", userId, groupId);
+    return groupServiceClient.isUserMemberOfGroup(groupId, userId);
+  }
+
+  /**
+   * Get group currency from Group Service
+   */
+  private String getGroupCurrency(UUID groupId) {
+    log.debug("Getting currency for group {}", groupId);
+    return groupServiceClient.getGroupCurrency(groupId);
   }
 
   /**

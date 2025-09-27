@@ -215,6 +215,16 @@ public class GroupService {
   }
 
   /**
+   * Get group currency
+   */
+  @Transactional(readOnly = true)
+  public String getGroupCurrency(UUID groupId) {
+    return groupRepository.findById(groupId)
+        .map(group -> group.getDefaultCurrency())
+        .orElse("USD"); // Default fallback
+  }
+
+  /**
    * Get groups where user is admin
    */
   @Transactional(readOnly = true)

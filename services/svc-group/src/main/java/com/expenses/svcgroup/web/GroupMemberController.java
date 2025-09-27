@@ -249,4 +249,12 @@ class GroupInternalController {
     boolean isAdmin = groupService.isUserAdminOfGroup(groupId, userId);
     return ResponseEntity.ok(isAdmin);
   }
+
+  @GetMapping("/currency")
+  @Operation(summary = "Get group currency", description = "Internal endpoint to get the default currency of the group")
+  public ResponseEntity<String> getGroupCurrency(@PathVariable UUID groupId) {
+    
+    String currency = groupService.getGroupCurrency(groupId);
+    return ResponseEntity.ok(currency);
+  }
 }
