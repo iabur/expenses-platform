@@ -56,8 +56,9 @@ public class SwaggerConfig {
             .description("Immutable accounting ledger & double-entry postings generated from domain events.")
             .contact(new Contact().name("Expenses Platform Team").email("support@expenses-platform.com"))
             .license(new License().name("MIT License").url("https://opensource.org/licenses/MIT")))
-        .addServersItem(new Server().url("http://localhost:8086").description("Local Ledger Service"))
-        .addServersItem(new Server().url("http://svc-ledger:8086").description("Docker Internal"))
+        .addServersItem(new Server().url("http://localhost:8080").description("Gateway (Recommended)"))
+        .addServersItem(new Server().url("http://localhost:8087").description("Direct Ledger Service"))
+        .addServersItem(new Server().url("http://svc-ledger:8087").description("Docker Internal"))
         .components(new Components()
             .addSecuritySchemes(SECURITY_SCHEME_NAME, new io.swagger.v3.oas.models.security.SecurityScheme()
                 .type(Type.HTTP).scheme("bearer").bearerFormat("JWT"))
@@ -72,11 +73,14 @@ public class SwaggerConfig {
           Content error = new Content().addMediaType("application/json", new MediaType()
               .schema(new Schema<>().$ref("#/components/schemas/ErrorResponse")));
           operation.getResponses()
-              .addApiResponse("400", new ApiResponse().description("Bad Request - validation / semantic error").content(error))
+              .addApiResponse("400",
+                  new ApiResponse().description("Bad Request - validation / semantic error").content(error))
               .addApiResponse("401", new ApiResponse().description("Unauthorized - missing/invalid JWT").content(error))
-              .addApiResponse("403", new ApiResponse().description("Forbidden - insufficient privileges").content(error))
+              .addApiResponse("403",
+                  new ApiResponse().description("Forbidden - insufficient privileges").content(error))
               .addApiResponse("404", new ApiResponse().description("Not Found").content(error))
-              .addApiResponse("409", new ApiResponse().description("Conflict - concurrency or duplication").content(error))
+              .addApiResponse("409",
+                  new ApiResponse().description("Conflict - concurrency or duplication").content(error))
               .addApiResponse("500", new ApiResponse().description("Internal server error").content(error));
         }));
   }

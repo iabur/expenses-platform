@@ -149,7 +149,7 @@ spring:
                 redis-rate-limiter.burstCapacity: 60
 
         # Ledger Service Routes (Internal only)
-        - id: svc-ledger
+        - id: svc-ledger-internal
           uri: lb://svc-ledger
           predicates:
             - Path=/internal/ledger/**
@@ -159,6 +159,18 @@ spring:
               args:
                 redis-rate-limiter.replenishRate: 10
                 redis-rate-limiter.burstCapacity: 20
+
+        # Ledger Service Routes (Public API)
+        - id: svc-ledger
+          uri: lb://svc-ledger
+          predicates:
+            - Path=/api/ledger/**
+          filters:
+            - RewritePath=/api/ledger/(?<segment>.*), /api/ledger/$\{segment}
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
 
         # FX Service Routes
         - id: svc-fx

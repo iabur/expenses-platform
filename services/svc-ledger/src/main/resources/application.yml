@@ -52,6 +52,11 @@ springdoc:
     filter: true
     tags-sorter: alpha
     operations-sorter: method
+    urls:
+      - url: http://localhost:8080
+        name: Gateway (Recommended)
+      - url: http://localhost:8087
+        name: Direct Ledger Service
   api-docs:
     enabled: true
     groups:
