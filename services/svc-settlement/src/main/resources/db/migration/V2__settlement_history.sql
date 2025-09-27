@@ -2,7 +2,7 @@
 -- This table tracks all settlement-related activities for audit and history purposes
 
 CREATE TABLE settlement_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id UUID NOT NULL,
     proposal_id UUID,
     payment_id UUID,
@@ -30,10 +30,7 @@ ALTER TABLE settlement_history
     ));
 
 -- Add foreign key constraints
-ALTER TABLE settlement_history 
-    ADD CONSTRAINT fk_settlement_history_group 
-    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE;
-
+-- Note: group_id references external service, so no FK constraint
 ALTER TABLE settlement_history 
     ADD CONSTRAINT fk_settlement_history_proposal 
     FOREIGN KEY (proposal_id) REFERENCES settlement_proposals(id) ON DELETE CASCADE;
