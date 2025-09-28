@@ -192,11 +192,11 @@ app:
       auto-create-enabled: true
 
 ---
-# Local development profile
+# Development profile for local development
 spring:
   config:
     activate:
-      on-profile: local
+      on-profile: dev
 
   datasource:
     url: jdbc:postgresql://localhost:5438/settlementdb
@@ -212,3 +212,8 @@ spring:
         jwt:
           # JWT validation using JWKS endpoint for local development
           jwk-set-uri: http://localhost:8090/realms/expenses/protocol/openid-connect/certs
+
+# Service URLs for local development
+services:
+  group:
+    url: http://localhost:8082

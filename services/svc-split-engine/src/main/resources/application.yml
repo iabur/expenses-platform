@@ -79,6 +79,27 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
 ---
+# Development profile for local development
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5437/splitenginedb
+    username: splitengine
+    password: splitengine
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8090/realms/expenses/protocol/openid-connect/certs
+
+---
 spring:
   config:
     activate:

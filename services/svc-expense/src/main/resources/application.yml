@@ -55,3 +55,29 @@ springdoc:
     enabled: true
     groups:
       enabled: true
+
+---
+# Development profile for local development
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5435/expensedb
+    username: expense
+    password: expense
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8090/realms/expenses/protocol/openid-connect/certs
+
+# Service URLs for local development
+services:
+  group:
+    url: http://localhost:8082

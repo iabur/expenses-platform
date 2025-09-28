@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   cloud:
     gateway:
       default-filters:
@@ -40,49 +42,49 @@ spring:
         # The following service API docs routes remain to proxy to downstream services
 
         - id: user-api-docs
-          uri: http://svc-user:8081
+          uri: http://localhost:8081
           predicates:
             - Path=/v3/api-docs/users
           filters:
             - RewritePath=/v3/api-docs/users, /v3/api-docs
 
         - id: group-api-docs
-          uri: http://svc-group:8082
+          uri: http://localhost:8082
           predicates:
             - Path=/v3/api-docs/groups
           filters:
             - RewritePath=/v3/api-docs/groups, /v3/api-docs
 
         - id: expense-api-docs
-          uri: http://svc-expense:8083
+          uri: http://localhost:8083
           predicates:
             - Path=/v3/api-docs/expenses
           filters:
             - RewritePath=/v3/api-docs/expenses, /v3/api-docs
 
         - id: ledger-api-docs
-          uri: http://svc-ledger:8087
+          uri: http://localhost:8087
           predicates:
             - Path=/v3/api-docs/ledger
           filters:
             - RewritePath=/v3/api-docs/ledger, /v3/api-docs
 
         - id: settlement-api-docs
-          uri: http://svc-settlement:8085
+          uri: http://localhost:8085
           predicates:
             - Path=/v3/api-docs/settlements
           filters:
             - RewritePath=/v3/api-docs/settlements, /v3/api-docs
 
         - id: split-engine-api-docs
-          uri: http://svc-split-engine:8084
+          uri: http://localhost:8084
           predicates:
             - Path=/v3/api-docs/split-engine
           filters:
             - RewritePath=/v3/api-docs/split-engine, /v3/api-docs
 
         - id: fx-api-docs
-          uri: http://svc-fx:8086
+          uri: http://localhost:8086
           predicates:
             - Path=/v3/api-docs/fx
           filters:
@@ -227,15 +229,17 @@ spring:
     web-application-type: reactive
 
   # Redis for Rate Limiting
-  redis:
-    host: localhost
-    port: 6379
-    timeout: 2000ms
-    lettuce:
-      pool:
-        max-active: 8
-        max-idle: 8
-        min-idle: 0
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+      database: 0
 
   security:
     oauth2:
@@ -271,3 +275,53 @@ springdoc:
 logging:
   level:
     org.springframework.cloud.gateway: INFO
+
+---
+# Development profile for local development
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  # Redis for Rate Limiting
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+      database: 0
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8090/realms/expenses/protocol/openid-connect/certs
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+        client:
+          simple:
+            instances:
+              svc-user:
+                - uri: http://localhost:8081
+              svc-group:
+                - uri: http://localhost:8082
+              svc-expense:
+                - uri: http://localhost:8083
+              svc-split-engine:
+                - uri: http://localhost:8084
+              svc-settlement:
+                - uri: http://localhost:8085
+              svc-fx:
+                - uri: http://localhost:8086
+              svc-ledger:
+                - uri: http://localhost:8087

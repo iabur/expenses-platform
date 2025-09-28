@@ -68,6 +68,27 @@ logging:
     org.springframework.kafka: INFO
 
 ---
+# Development profile for local development
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:postgresql://localhost:5436/ledgerdb
+    username: ledger
+    password: ledger
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8090/realms/expenses/protocol/openid-connect/certs
+
+---
 spring:
   config:
     activate:

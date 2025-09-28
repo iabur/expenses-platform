@@ -1,0 +1,123 @@
+version: "3.9"
+
+# Development Docker Compose - Only infrastructure services
+# Use this for local development with IntelliJ IDEA
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.2
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_HTTP_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./services/svc-identity-config/keycloak-realm-expenses.json:/opt/keycloak/data/import/realm.json
+    ports:
+      - "8090:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports: ["2181:2181"]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    depends_on: [zookeeper]
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    command: redis-server --appendonly yes
+
+  pg-user:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: user
+    ports: ["5433:5432"]
+    volumes:
+      - pg_user_data:/var/lib/postgresql/data
+
+  pg-group:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: groupdb
+      POSTGRES_USER: group
+      POSTGRES_PASSWORD: group
+    ports: ["5434:5432"]
+    volumes:
+      - pg_group_data:/var/lib/postgresql/data
+
+  pg-expense:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: expensedb
+      POSTGRES_USER: expense
+      POSTGRES_PASSWORD: expense
+    ports: ["5435:5432"]
+    volumes:
+      - pg_expense_data:/var/lib/postgresql/data
+
+  pg-ledger:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ledgerdb
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+    ports: ["5436:5432"]
+    volumes:
+      - pg_ledger_data:/var/lib/postgresql/data
+
+  pg-split-engine:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: splitenginedb
+      POSTGRES_USER: splitengine
+      POSTGRES_PASSWORD: splitengine
+    ports: ["5437:5432"]
+    volumes:
+      - pg_split_engine_data:/var/lib/postgresql/data
+
+  pg-settlement:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: settlementdb
+      POSTGRES_USER: settlement
+      POSTGRES_PASSWORD: settlement
+    ports: ["5438:5432"]
+    volumes:
+      - pg_settlement_data:/var/lib/postgresql/data
+
+  pg-fx:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fxdb
+      POSTGRES_USER: fxservice
+      POSTGRES_PASSWORD: fxpass123
+    ports: ["5439:5432"]
+    volumes:
+      - pg_fx_data:/var/lib/postgresql/data
+
+volumes:
+  pg_user_data:
+  pg_group_data:
+  pg_expense_data:
+  pg_ledger_data:
+  pg_split_engine_data:
+  pg_settlement_data:
+  pg_fx_data:
+
