@@ -110,36 +110,6 @@ CREATE TRIGGER trigger_create_account_balance
     FOR EACH ROW
     EXECUTE FUNCTION create_account_balance();
 
--- Create function to validate journal entry balance
-CREATE OR REPLACE FUNCTION validate_journal_balance()
-RETURNS TRIGGER AS $$
-DECLARE
-    total_debits BIGINT;
-    total_credits BIGINT;
-BEGIN
-    -- Calculate total debits and credits for the journal entry
-    SELECT 
-        COALESCE(SUM(CASE WHEN debit_account_id IS NOT NULL THEN amount_cents ELSE 0 END), 0),
-        COALESCE(SUM(CASE WHEN credit_account_id IS NOT NULL THEN amount_cents ELSE 0 END), 0)
-    INTO total_debits, total_credits
-    FROM postings 
-    WHERE journal_entry_id = COALESCE(NEW.journal_entry_id, OLD.journal_entry_id);
-    
-    -- Check if journal entry is balanced
-    IF total_debits != total_credits THEN
-        RAISE EXCEPTION 'Journal entry must be balanced: debits (%) != credits (%)', total_debits, total_credits;
-    END IF;
-    
-    RETURN COALESCE(NEW, OLD);
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to validate journal balance on posting changes
-CREATE TRIGGER trigger_validate_journal_balance
-    AFTER INSERT OR UPDATE OR DELETE ON postings
-    FOR EACH ROW
-    EXECUTE FUNCTION validate_journal_balance();
-
 -- Create function to update account balance when posting changes
 CREATE OR REPLACE FUNCTION update_account_balance()
 RETURNS TRIGGER AS $$

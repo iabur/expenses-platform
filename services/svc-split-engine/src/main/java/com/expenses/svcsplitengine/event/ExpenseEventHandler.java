@@ -65,7 +65,7 @@ public class ExpenseEventHandler extends BaseEventHandler {
         log.info("Expense {} was paid by: {}", event.getAggregateId(), paidBy);
 
         // Calculate splits
-        var splitResult = splitCalculationService.calculateSplits(splitRequest);
+        var splitResult = splitCalculationService.calculateSplits(splitRequest, event.getCausedBy(), paidBy);
 
         // Convert SplitResult to SplitInfo list for balance update
         List<com.expenses.common.event.ExpenseEvent.SplitInfo> splits = splitResult.participantSplits().stream()

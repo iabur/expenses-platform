@@ -121,14 +121,17 @@ public abstract class ExpenseEvent extends DomainEvent {
     private List<SplitInfo> splits;
     private Long totalAmountCents;
     private String currency;
+    private UUID paidBy;
 
     public ExpenseSplitsCalculated(UUID expenseId, UUID groupId, List<SplitInfo> splits,
-        Long totalAmountCents, String currency) {
+        Long totalAmountCents, String currency, UUID paidBy, UUID causedBy) {
       super("EXPENSE_SPLITS_CALCULATED", expenseId);
       this.groupId = groupId;
       this.splits = splits;
       this.totalAmountCents = totalAmountCents;
       this.currency = currency;
+      this.paidBy = paidBy;
+      setCausedBy(causedBy);
     }
   }
 

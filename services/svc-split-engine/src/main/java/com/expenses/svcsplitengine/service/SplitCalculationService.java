@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -36,6 +35,21 @@ public class SplitCalculationService {
    * Calculate expense splits based on split request
    */
   public SplitResult calculateSplits(SplitRequest request) {
+    return calculateSplits(request, null);
+  }
+
+  /**
+   * Calculate expense splits based on split request with causedBy information
+   */
+  public SplitResult calculateSplits(SplitRequest request, UUID causedBy) {
+    return calculateSplits(request, causedBy, null);
+  }
+
+  /**
+   * Calculate expense splits based on split request with causedBy and paidBy
+   * information
+   */
+  public SplitResult calculateSplits(SplitRequest request, UUID causedBy, UUID paidBy) {
     log.info("Calculating splits for expense {} with method {}",
         request.expenseId(), request.splitMethod());
 
@@ -62,7 +76,7 @@ public class SplitCalculationService {
       SplitCalculation savedCalculation = splitCalculationRepository.save(calculation);
 
       // Publish splits calculated event
-      publishSplitsCalculatedEvent(savedCalculation);
+      publishSplitsCalculatedEvent(savedCalculation, causedBy, paidBy);
 
       log.info("Successfully calculated {} splits for expense {}",
           splits.size(), request.expenseId());
@@ -309,7 +323,7 @@ public class SplitCalculationService {
   /**
    * Publish splits calculated event
    */
-  private void publishSplitsCalculatedEvent(SplitCalculation calculation) {
+  private void publishSplitsCalculatedEvent(SplitCalculation calculation, UUID causedBy, UUID paidBy) {
     List<ExpenseEvent.SplitInfo> splitInfos = calculation.getParticipantSplits().stream()
         .map(split -> ExpenseEvent.SplitInfo.builder()
             .userId(split.getUserId())
@@ -323,7 +337,9 @@ public class SplitCalculationService {
         calculation.getGroupId(),
         splitInfos,
         calculation.getTotalAmountCents(),
-        calculation.getCurrency());
+        calculation.getCurrency(),
+        paidBy,
+        causedBy);
 
     eventPublisher.publishEventAsync(event);
   }

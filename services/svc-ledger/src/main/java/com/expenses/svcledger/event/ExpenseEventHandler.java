@@ -2,15 +2,16 @@ package com.expenses.svcledger.event;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import com.expenses.svcledger.entity.Posting;
 import com.expenses.svcledger.repository.AccountBalanceRepository;
 import com.expenses.svcledger.repository.AccountRepository;
 import com.expenses.svcledger.repository.JournalEntryRepository;
+import com.expenses.svcledger.repository.PostingRepository;
 import com.expenses.svcledger.service.AccountService;
 
 import lombok.RequiredArgsConstructor;
@@ -40,22 +42,26 @@ public class ExpenseEventHandler extends BaseEventHandler {
   private final AccountRepository accountRepository;
   private final AccountBalanceRepository accountBalanceRepository;
   private final JournalEntryRepository journalEntryRepository;
+  private final PostingRepository postingRepository;
   private final AccountService accountService;
 
   @KafkaListener(topics = ExpenseEvent.TOPIC, groupId = "ledger-service")
-  public void handleExpenseEvents(@Header(KafkaHeaders.RECEIVED_KEY) String key, DomainEvent event, Acknowledgment acknowledgment) {
+  public void handleExpenseEvents(@Header(KafkaHeaders.RECEIVED_KEY) String key, DomainEvent event,
+      Acknowledgment acknowledgment) {
     try {
       if (event == null) {
         log.warn("Received null event with key: {}", key);
         acknowledgment.acknowledge();
         return;
       }
-      log.info("Processing expense event: {} (class={}) with key: {}", event.getEventName(), event.getClass().getName(), key);
+      log.info("Processing expense event: {} (class={}) with key: {}", event.getEventName(), event.getClass().getName(),
+          key);
 
       processEvent(event);
       acknowledgment.acknowledge();
     } catch (Exception e) {
-      log.error("Error processing expense event (key={}, type={}): {}", key, event != null ? event.getClass().getName() : "null", e.getMessage(), e);
+      log.error("Error processing expense event (key={}, type={}): {}", key,
+          event != null ? event.getClass().getName() : "null", e.getMessage(), e);
       acknowledgment.acknowledge(); // Acknowledge to prevent infinite retry
     }
   }
@@ -68,23 +74,26 @@ public class ExpenseEventHandler extends BaseEventHandler {
         case "EXPENSE_CREATED" -> handleExpenseCreated((ExpenseEvent.ExpenseCreated) expenseEvent);
         case "EXPENSE_UPDATED" -> handleExpenseUpdated((ExpenseEvent.ExpenseUpdated) expenseEvent);
         case "EXPENSE_DELETED" -> handleExpenseDeleted((ExpenseEvent.ExpenseDeleted) expenseEvent);
+        case "EXPENSE_SPLITS_CALCULATED" ->
+          handleExpenseSplitsCalculated((ExpenseEvent.ExpenseSplitsCalculated) expenseEvent);
         default -> log.debug("Unhandled expense event: {}", expenseEvent.getEventName());
       }
     }
   }
 
   /**
-   * Handle expense created - create journal entries and postings
+   * Handle expense splits calculated - create journal entries and postings with
+   * actual calculated amounts
    */
-  private void handleExpenseCreated(ExpenseEvent.ExpenseCreated event) {
-    log.info("Processing expense created event for expense: {}", event.getAggregateId());
+  @Transactional
+  private void handleExpenseSplitsCalculated(ExpenseEvent.ExpenseSplitsCalculated event) {
+    log.info("Processing expense splits calculated event for expense: {}", event.getAggregateId());
 
     try {
       UUID expenseId = event.getAggregateId();
       UUID groupId = event.getGroupId();
       String currency = event.getCurrency();
-      Long amountCents = event.getAmountCents();
-      UUID paidBy = event.getPaidBy() != null ? event.getPaidBy() : event.getCreatedBy();
+      Long totalAmountCents = event.getTotalAmountCents();
 
       // Ensure system account exists
       Account systemAccount = getOrCreateSystemAccount(currency, "EXPENSES");
@@ -94,71 +103,117 @@ public class ExpenseEventHandler extends BaseEventHandler {
           .referenceType(JournalEntry.ReferenceType.EXPENSE)
           .referenceId(expenseId)
           .groupId(groupId)
-          .description("Expense: " + event.getNote())
+          .description("Expense splits calculated")
           .valueDate(LocalDate.now())
-          .createdBy(event.getCreatedBy())
+          .createdBy(event.getCausedBy())
           .build();
 
       List<Posting> postings = new ArrayList<>();
 
-      // Create postings for each participant
-      if (event.getParticipants() != null && !event.getParticipants().isEmpty()) {
-        for (ExpenseEvent.ParticipantInfo participant : event.getParticipants()) {
-          UUID userId = participant.getUserId();
+      // Create postings for each split
+      if (event.getSplits() != null && !event.getSplits().isEmpty()) {
+        for (ExpenseEvent.SplitInfo split : event.getSplits()) {
+          UUID userId = split.getUserId();
+          Long splitAmountCents = split.getAmountCents();
 
-          // Ensure user account exists
-          Account userAccount = getOrCreateUserAccount(userId, currency);
+          if (splitAmountCents > 0) {
+            // Ensure user account exists
+            Account userAccount = getOrCreateUserAccount(userId, currency);
 
-          // Calculate participant's share (this should match Split Engine calculation)
-          Long participantAmountCents = calculateParticipantAmount(participant, amountCents);
-
-          if (participantAmountCents > 0) {
-            // Create posting: Debit user account, Credit system account
-            Posting posting = Posting.builder()
+            // Create debit posting: Debit user account (user owes money)
+            Posting debitPosting = Posting.builder()
                 .journalEntry(journalEntry)
                 .debitAccount(userAccount)
-                .creditAccount(systemAccount)
-                .amountCents(participantAmountCents)
+                .amountCents(splitAmountCents)
                 .currency(currency)
-                .description("Expense share for " + participant.getUserId())
+                .description("Expense share for " + userId)
                 .build();
 
-            postings.add(posting);
+            // Create credit posting: Credit system account (system receives money)
+            Posting creditPosting = Posting.builder()
+                .journalEntry(journalEntry)
+                .creditAccount(systemAccount)
+                .amountCents(splitAmountCents)
+                .currency(currency)
+                .description("Expense share for " + userId)
+                .build();
+
+            postings.add(debitPosting);
+            postings.add(creditPosting);
           }
         }
       }
 
-      // Add the main expense posting (Credit system account, Debit paidBy account)
-      if (amountCents > 0) {
+      // Add the payment posting (Debit system account, Credit paidBy account)
+      if (totalAmountCents > 0) {
+        UUID paidBy = event.getPaidBy();
+        if (paidBy == null) {
+          log.warn(
+              "No paidBy information in expense splits calculated event for expense {}, using causedBy as fallback",
+              expenseId);
+          paidBy = event.getCausedBy();
+        }
+
         Account paidByAccount = getOrCreateUserAccount(paidBy, currency);
 
-        Posting mainPosting = Posting.builder()
+        // Create debit posting: Debit system account (system paid the expense)
+        Posting debitPaymentPosting = Posting.builder()
             .journalEntry(journalEntry)
             .debitAccount(systemAccount)
-            .creditAccount(paidByAccount)
-            .amountCents(amountCents)
+            .amountCents(totalAmountCents)
             .currency(currency)
             .description("Expense payment by " + paidBy)
             .build();
 
-        postings.add(mainPosting);
+        // Create credit posting: Credit paidBy account (paidBy user should be
+        // reimbursed)
+        Posting creditPaymentPosting = Posting.builder()
+            .journalEntry(journalEntry)
+            .creditAccount(paidByAccount)
+            .amountCents(totalAmountCents)
+            .currency(currency)
+            .description("Expense payment by " + paidBy)
+            .build();
+
+        postings.add(debitPaymentPosting);
+        postings.add(creditPaymentPosting);
       }
 
-      // Save journal entry with postings
-      journalEntry.setPostings(postings);
-      journalEntryRepository.save(journalEntry);
+      // Save journal entry first
+      JournalEntry savedJournalEntry = journalEntryRepository.save(journalEntry);
+
+      // Save postings individually to avoid cascade issues
+      for (Posting posting : postings) {
+        posting.setJournalEntry(savedJournalEntry);
+        postingRepository.save(posting);
+      }
+
+      // Validate journal entry balance after all postings are saved
+      validateJournalEntryBalance(savedJournalEntry.getId());
 
       // Update account balances
       updateAccountBalances(postings);
 
-      log.info("Successfully created journal entry {} with {} postings for expense {}",
+      log.info("Successfully created journal entry {} with {} postings for expense {} splits",
           journalEntry.getId(), postings.size(), expenseId);
 
     } catch (Exception e) {
-      log.error("Failed to process expense creation for expense {}: {}",
+      log.error("Failed to process expense splits calculation for expense {}: {}",
           event.getAggregateId(), e.getMessage(), e);
       throw e;
     }
+  }
+
+  /**
+   * Handle expense created - just log that it was processed
+   * Actual journal entries will be created when EXPENSE_SPLITS_CALCULATED event
+   * is received
+   */
+  private void handleExpenseCreated(ExpenseEvent.ExpenseCreated event) {
+    log.info("Processing expense created event for expense: {} - waiting for splits calculation",
+        event.getAggregateId());
+    // No action needed here - journal entries will be created when splits are
+    // calculated
   }
 
   /**
@@ -259,16 +314,16 @@ public class ExpenseEventHandler extends BaseEventHandler {
   /**
    * Calculate participant amount based on split rules
    */
-  private Long calculateParticipantAmount(ExpenseEvent.ParticipantInfo participant, Long totalAmountCents) {
+  private Long calculateParticipantAmount(ExpenseEvent.ParticipantInfo participant, Long totalAmountCents,
+      int participantCount) {
     // This is a simplified calculation - in production you might want to
     // get the actual calculated amounts from the Split Engine
     String ruleType = participant.getSplitRuleType();
     BigDecimal ruleValue = participant.getSplitRuleValue();
 
     if ("EQUAL".equals(ruleType)) {
-      // For equal splits, we'll use a simple division
-      // In production, you should get the actual calculated amount from Split Engine
-      return totalAmountCents / 3; // Simplified - should get from Split Engine
+      // For equal splits, divide by the actual number of participants
+      return totalAmountCents / participantCount;
     } else if ("PERCENTAGE".equals(ruleType) && ruleValue != null) {
       return (long) (totalAmountCents * ruleValue.doubleValue() / 100);
     } else if ("EXACT_AMOUNT".equals(ruleType) && ruleValue != null) {
@@ -284,31 +339,67 @@ public class ExpenseEventHandler extends BaseEventHandler {
   private void updateAccountBalances(List<Posting> postings) {
     for (Posting posting : postings) {
       // Update debit account balance
-      AccountBalance debitBalance = accountBalanceRepository
-          .findByAccount(posting.getDebitAccount())
-          .orElseGet(() -> {
-            AccountBalance balance = new AccountBalance();
-            balance.setAccount(posting.getDebitAccount());
-            balance.setBalanceCents(0L);
-            return balance;
-          });
+      if (posting.getDebitAccount() != null) {
+        AccountBalance debitBalance = accountBalanceRepository
+            .findByAccount(posting.getDebitAccount())
+            .orElseGet(() -> {
+              AccountBalance balance = new AccountBalance();
+              balance.setAccount(posting.getDebitAccount());
+              balance.setBalanceCents(0L);
+              balance.setLastUpdated(ZonedDateTime.now());
+              balance.setVersion(0L);
+              return balance;
+            });
 
-      debitBalance.addToBalance(posting.getAmountCents());
-      accountBalanceRepository.save(debitBalance);
+        debitBalance.addToBalance(posting.getAmountCents());
+        accountBalanceRepository.save(debitBalance);
+      }
 
       // Update credit account balance
-      AccountBalance creditBalance = accountBalanceRepository
-          .findByAccount(posting.getCreditAccount())
-          .orElseGet(() -> {
-            AccountBalance balance = new AccountBalance();
-            balance.setAccount(posting.getCreditAccount());
-            balance.setBalanceCents(0L);
-            return balance;
-          });
+      if (posting.getCreditAccount() != null) {
+        AccountBalance creditBalance = accountBalanceRepository
+            .findByAccount(posting.getCreditAccount())
+            .orElseGet(() -> {
+              AccountBalance balance = new AccountBalance();
+              balance.setAccount(posting.getCreditAccount());
+              balance.setBalanceCents(0L);
+              balance.setLastUpdated(ZonedDateTime.now());
+              balance.setVersion(0L);
+              return balance;
+            });
 
-      creditBalance.subtractFromBalance(posting.getAmountCents());
-      accountBalanceRepository.save(creditBalance);
+        creditBalance.subtractFromBalance(posting.getAmountCents());
+        accountBalanceRepository.save(creditBalance);
+      }
     }
+  }
+
+  /**
+   * Validate that a journal entry is balanced (total debits = total credits)
+   */
+  private void validateJournalEntryBalance(UUID journalEntryId) {
+    // Get all postings for this journal entry
+    List<Posting> postings = postingRepository.findByJournalEntryId(journalEntryId);
+
+    long totalDebits = 0;
+    long totalCredits = 0;
+
+    for (Posting posting : postings) {
+      if (posting.getDebitAccount() != null) {
+        totalDebits += posting.getAmountCents();
+      }
+      if (posting.getCreditAccount() != null) {
+        totalCredits += posting.getAmountCents();
+      }
+    }
+
+    if (totalDebits != totalCredits) {
+      throw new IllegalStateException(
+          String.format("Journal entry %s is not balanced: debits (%d) != credits (%d)",
+              journalEntryId, totalDebits, totalCredits));
+    }
+
+    log.debug("Journal entry {} is balanced: debits={}, credits={}", journalEntryId, totalDebits, totalCredits);
   }
 
   @Override
