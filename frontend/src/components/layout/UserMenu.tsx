@@ -1,14 +1,14 @@
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { LogOut, Settings, User as UserIcon } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuthStore } from '@/stores/auth';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useAuthStore } from '../../stores/auth.store';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 export function UserMenu() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const initial = user?.name?.charAt(0).toUpperCase() || 'U';
+  const initial = user?.displayName?.charAt(0).toUpperCase() || user?.firstName?.charAt(0).toUpperCase() || 'U';
 
   const go = (path: string) => {
     navigate(path);
@@ -24,13 +24,13 @@ export function UserMenu() {
         aria-label="Open user menu"
       >
         <Avatar className="w-8 h-8">
-          <AvatarImage src="" alt={user?.name || 'User'} />
+          <AvatarImage src={user?.avatarUrl || ''} alt={user?.displayName || 'User'} />
           <AvatarFallback className="bg-blue-600 text-white text-sm font-medium">
             {initial}
           </AvatarFallback>
         </Avatar>
         <span className="hidden md:flex flex-col text-left leading-tight">
-            <span className="text-sm font-medium text-gray-900">{user?.name || 'User'}</span>
+            <span className="text-sm font-medium text-gray-900">{user?.displayName || 'User'}</span>
             <span className="text-[11px] text-gray-500 max-w-[140px] truncate">{user?.email}</span>
         </span>
       </Dropdown.Trigger>
