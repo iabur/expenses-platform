@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.expenses.common.event.EventPublisher;
+import com.expenses.common.event.SettlementEvent;
 import com.expenses.svcsettle.client.GroupServiceClient;
 import com.expenses.svcsettle.dto.SettlementDto;
 import com.expenses.svcsettle.entity.SettlementPayment;
@@ -25,7 +28,6 @@ import com.expenses.svcsettle.exception.SettlementNotFoundException;
 import com.expenses.svcsettle.exception.UnauthorizedSettlementAccessException;
 import com.expenses.svcsettle.repository.SettlementPaymentRepository;
 import com.expenses.svcsettle.repository.SettlementProposalRepository;
-import com.expenses.svcsettle.service.SettlementHistoryService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +42,7 @@ public class SettlementService {
   private final SettlementPaymentRepository settlementPaymentRepository;
   private final SettlementHistoryService settlementHistoryService;
   private final GroupServiceClient groupServiceClient;
+  private final EventPublisher eventPublisher;
 
   /**
    * Create a new settlement proposal
@@ -54,7 +57,8 @@ public class SettlementService {
 
     // Verify user is member of the group
     if (!isUserMemberOfGroup(request.groupId(), currentUserId)) {
-      throw new UnauthorizedSettlementAccessException("You must be a member of the group to create settlement proposals");
+      throw new UnauthorizedSettlementAccessException(
+          "You must be a member of the group to create settlement proposals");
     }
 
     // Calculate total amount from payments first
@@ -92,13 +96,18 @@ public class SettlementService {
 
     settlementPaymentRepository.saveAll(payments);
 
-    // Attach payments to proposal entity so response includes them (the owning side is SettlementPayment)
+    // Attach payments to proposal entity so response includes them (the owning side
+    // is SettlementPayment)
     payments.forEach(p -> savedProposal.getPayments().add(p));
 
     // Record history
     settlementHistoryService.recordProposalCreated(savedProposal, currentUserId);
 
-    log.info("Created settlement proposal {} for group {} with {} payments", savedProposal.getId(), request.groupId(), payments.size());
+    // Publish event
+    publishProposalCreatedEvent(savedProposal, payments);
+
+    log.info("Created settlement proposal {} for group {} with {} payments", savedProposal.getId(), request.groupId(),
+        payments.size());
 
     return SettlementDto.SettlementProposalResponse.from(savedProposal);
   }
@@ -154,7 +163,7 @@ public class SettlementService {
     if (request.payments() != null && !request.payments().isEmpty()) {
       // Remove existing payments
       proposal.getPayments().clear();
-      
+
       // Add new payments
       List<SettlementPayment> newPayments = request.payments().stream()
           .map(paymentRequest -> SettlementPayment.builder()
@@ -168,9 +177,9 @@ public class SettlementService {
               .status(SettlementPayment.PaymentStatus.PENDING)
               .build())
           .toList();
-      
+
       proposal.getPayments().addAll(newPayments);
-      
+
       // Recalculate total amount
       long newTotalAmountCents = newPayments.stream()
           .mapToLong(SettlementPayment::getAmountCents)
@@ -200,15 +209,20 @@ public class SettlementService {
 
     // Check if user has permission to accept (group member or involved in payments)
     if (!isUserMemberOfGroup(proposal.getGroupId(), currentUserId)) {
-      throw new UnauthorizedSettlementAccessException("You must be a member of the group to accept settlement proposals");
+      throw new UnauthorizedSettlementAccessException(
+          "You must be a member of the group to accept settlement proposals");
     }
 
+    String previousStatus = proposal.getStatus().name();
     proposal.accept();
 
     SettlementProposal savedProposal = settlementProposalRepository.save(proposal);
 
     // Record history
     settlementHistoryService.recordProposalAccepted(savedProposal, currentUserId);
+
+    // Publish event
+    publishProposalAcceptedEvent(savedProposal, currentUserId, previousStatus);
 
     log.info("Accepted settlement proposal {} by user {}", proposalId, currentUserId);
 
@@ -227,7 +241,8 @@ public class SettlementService {
 
     // Check if user has permission to reject
     if (!isUserMemberOfGroup(proposal.getGroupId(), currentUserId)) {
-      throw new UnauthorizedSettlementAccessException("You must be a member of the group to reject settlement proposals");
+      throw new UnauthorizedSettlementAccessException(
+          "You must be a member of the group to reject settlement proposals");
     }
 
     proposal.reject();
@@ -236,6 +251,9 @@ public class SettlementService {
 
     // Record history
     settlementHistoryService.recordProposalRejected(savedProposal, currentUserId);
+
+    // Publish event
+    publishProposalRejectedEvent(savedProposal, currentUserId, null);
 
     log.info("Rejected settlement proposal {} by user {}", proposalId, currentUserId);
 
@@ -258,7 +276,10 @@ public class SettlementService {
 
     proposal.cancel();
 
-    settlementProposalRepository.save(proposal);
+    SettlementProposal savedProposal = settlementProposalRepository.save(proposal);
+
+    // Publish event
+    publishProposalCancelledEvent(savedProposal, currentUserId, null);
 
     log.info("Cancelled settlement proposal {} by user {}", proposalId, currentUserId);
   }
@@ -332,6 +353,9 @@ public class SettlementService {
     // Record history
     settlementHistoryService.recordPaymentConfirmed(savedPayment, currentUserId, "PAYER");
 
+    // Publish event
+    publishPaymentConfirmedEvent(savedPayment, currentUserId, "PAYER_CONFIRMED", request.notes());
+
     log.info("Payment {} confirmed by payer {}", paymentId, currentUserId);
 
     return SettlementDto.SettlementPaymentResponse.from(savedPayment);
@@ -362,6 +386,15 @@ public class SettlementService {
 
     // Record history
     settlementHistoryService.recordPaymentConfirmed(savedPayment, currentUserId, "PAYEE");
+
+    // Publish event
+    publishPaymentConfirmedEvent(savedPayment, currentUserId, "PAYEE_CONFIRMED", request.notes());
+
+    // If payment is now completed (both parties confirmed), publish
+    // PaymentCompleted event
+    if (savedPayment.getStatus() == SettlementPayment.PaymentStatus.COMPLETED) {
+      publishPaymentCompletedEvent(savedPayment);
+    }
 
     // Check if all payments in the proposal are completed
     checkAndUpdateProposalCompletion(payment.getProposal().getId());
@@ -405,6 +438,9 @@ public class SettlementService {
 
     // Record history
     settlementHistoryService.recordPaymentDisputed(savedPayment, currentUserId, request.reason());
+
+    // Publish event
+    publishPaymentDisputedEvent(savedPayment, currentUserId, request.reason());
 
     log.info("Payment {} disputed by user {} with reason: {}", paymentId, currentUserId, request.reason());
 
@@ -456,7 +492,8 @@ public class SettlementService {
     log.info("Optimizing debts for group {} by user {}", request.groupId(), currentUserId);
 
     // Get all active proposals for the group
-    List<SettlementProposal> activeProposals = settlementProposalRepository.findByGroupIdOrderByCreatedAtDesc(request.groupId(), Pageable.unpaged())
+    List<SettlementProposal> activeProposals = settlementProposalRepository
+        .findByGroupIdOrderByCreatedAtDesc(request.groupId(), Pageable.unpaged())
         .getContent()
         .stream()
         .filter(p -> p.getStatus() == SettlementProposal.SettlementStatus.ACCEPTED)
@@ -464,19 +501,21 @@ public class SettlementService {
 
     // Calculate current debt relationships
     Map<UUID, BigDecimal> netBalances = calculateNetBalances(activeProposals);
-    
+
     // Generate optimized transactions
-    List<SettlementDto.OptimizedTransaction> optimizedTransactions = generateOptimizedTransactions(netBalances, request.minimumAmount());
+    List<SettlementDto.OptimizedTransaction> optimizedTransactions = generateOptimizedTransactions(netBalances,
+        request.minimumAmount());
 
     // Calculate statistics
     int originalTransactionsCount = activeProposals.stream()
         .mapToInt(p -> p.getPayments().size())
         .sum();
-    
+
     int optimizedTransactionsCount = optimizedTransactions.size();
-    
-    BigDecimal savingsPercentage = originalTransactionsCount > 0 
-        ? BigDecimal.valueOf((double)(originalTransactionsCount - optimizedTransactionsCount) / originalTransactionsCount * 100)
+
+    BigDecimal savingsPercentage = originalTransactionsCount > 0
+        ? BigDecimal.valueOf(
+            (double) (originalTransactionsCount - optimizedTransactionsCount) / originalTransactionsCount * 100)
         : BigDecimal.ZERO;
 
     BigDecimal totalDebtAmount = netBalances.values().stream()
@@ -511,7 +550,8 @@ public class SettlementService {
     log.info("Getting settlement status for group {} by user {}", groupId, currentUserId);
 
     // Get all proposals for the group
-    List<SettlementProposal> allProposals = settlementProposalRepository.findByGroupIdOrderByCreatedAtDesc(groupId, Pageable.unpaged()).getContent();
+    List<SettlementProposal> allProposals = settlementProposalRepository
+        .findByGroupIdOrderByCreatedAtDesc(groupId, Pageable.unpaged()).getContent();
 
     // Calculate totals
     BigDecimal totalDebtAmount = allProposals.stream()
@@ -631,25 +671,25 @@ public class SettlementService {
    */
   private Map<UUID, BigDecimal> calculateNetBalances(List<SettlementProposal> proposals) {
     Map<UUID, BigDecimal> netBalances = new HashMap<>();
-    
+
     for (SettlementProposal proposal : proposals) {
       for (SettlementPayment payment : proposal.getPayments()) {
         if (payment.getStatus() == SettlementPayment.PaymentStatus.PENDING ||
             payment.getStatus() == SettlementPayment.PaymentStatus.CONFIRMED) {
-          
+
           UUID payerId = payment.getPayerId();
           UUID payeeId = payment.getPayeeId();
           BigDecimal amount = payment.getAmountDecimal();
-          
+
           // Payer owes money (negative balance)
           netBalances.merge(payerId, amount.negate(), BigDecimal::add);
-          
+
           // Payee is owed money (positive balance)
           netBalances.merge(payeeId, amount, BigDecimal::add);
         }
       }
     }
-    
+
     return netBalances;
   }
 
@@ -658,33 +698,33 @@ public class SettlementService {
    */
   private List<SettlementDto.OptimizedTransaction> generateOptimizedTransactions(
       Map<UUID, BigDecimal> netBalances, BigDecimal minimumAmount) {
-    
+
     List<SettlementDto.OptimizedTransaction> transactions = new ArrayList<>();
-    
+
     // Separate creditors (positive balance) and debtors (negative balance)
     List<Map.Entry<UUID, BigDecimal>> creditors = netBalances.entrySet().stream()
         .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) > 0)
         .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
         .toList();
-    
+
     List<Map.Entry<UUID, BigDecimal>> debtors = netBalances.entrySet().stream()
         .filter(entry -> entry.getValue().compareTo(BigDecimal.ZERO) < 0)
         .sorted((a, b) -> a.getValue().compareTo(b.getValue()))
         .toList();
-    
+
     // Simple debt optimization: match largest creditors with largest debtors
     int creditorIndex = 0;
     int debtorIndex = 0;
-    
+
     while (creditorIndex < creditors.size() && debtorIndex < debtors.size()) {
       Map.Entry<UUID, BigDecimal> creditor = creditors.get(creditorIndex);
       Map.Entry<UUID, BigDecimal> debtor = debtors.get(debtorIndex);
-      
+
       BigDecimal creditorAmount = creditor.getValue();
       BigDecimal debtorAmount = debtor.getValue().abs();
-      
+
       BigDecimal transferAmount = creditorAmount.min(debtorAmount);
-      
+
       // Only create transaction if amount is above minimum threshold
       if (transferAmount.compareTo(minimumAmount) >= 0) {
         transactions.add(SettlementDto.OptimizedTransaction.builder()
@@ -694,11 +734,11 @@ public class SettlementService {
             .description("Optimized debt settlement")
             .build());
       }
-      
+
       // Update balances
       creditor.setValue(creditorAmount.subtract(transferAmount));
       debtor.setValue(debtorAmount.subtract(transferAmount));
-      
+
       // Move to next creditor/debtor if current one is settled
       if (creditor.getValue().compareTo(BigDecimal.ZERO) <= 0) {
         creditorIndex++;
@@ -707,7 +747,7 @@ public class SettlementService {
         debtorIndex++;
       }
     }
-    
+
     return transactions;
   }
 
@@ -730,7 +770,7 @@ public class SettlementService {
         // Only count active payments (not completed or cancelled)
         if (payment.getStatus() == SettlementPayment.PaymentStatus.PENDING ||
             payment.getStatus() == SettlementPayment.PaymentStatus.CONFIRMED) {
-          
+
           // Payer owes money
           totalOwed.merge(payerId, amount, BigDecimal::add);
           activeDebtsCount.merge(payerId, 1, Integer::sum);
@@ -808,7 +848,145 @@ public class SettlementService {
       // Record history
       settlementHistoryService.recordProposalCompleted(savedProposal);
 
+      // Publish event
+      publishProposalCompletedEvent(savedProposal);
+
       log.info("Settlement proposal {} marked as completed - all payments finished", proposalId);
     }
+  }
+
+  // ======================== Event Publishing Methods ========================
+
+  private void publishProposalCreatedEvent(SettlementProposal proposal, List<SettlementPayment> payments) {
+    List<SettlementEvent.PaymentInfo> paymentInfos = payments.stream()
+        .map(p -> SettlementEvent.PaymentInfo.builder()
+            .paymentId(p.getId())
+            .payerId(p.getPayerId())
+            .payeeId(p.getPayeeId())
+            .amountCents(p.getAmountCents())
+            .currency(p.getCurrency())
+            .description(p.getDescription())
+            .paymentMethod(p.getPaymentMethod())
+            .build())
+        .collect(Collectors.toList());
+
+    SettlementEvent.ProposalCreated event = new SettlementEvent.ProposalCreated(
+        proposal.getId(),
+        proposal.getGroupId(),
+        proposal.getProposerId(),
+        proposal.getTitle(),
+        proposal.getDescription(),
+        proposal.getCurrency(),
+        proposal.getTotalAmountCents(),
+        proposal.getProposalType() != null ? proposal.getProposalType().name() : null,
+        paymentInfos,
+        proposal.getExpiresAt());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published ProposalCreated event for proposal {}", proposal.getId());
+  }
+
+  private void publishProposalAcceptedEvent(SettlementProposal proposal, UUID acceptedBy, String previousStatus) {
+    SettlementEvent.ProposalAccepted event = new SettlementEvent.ProposalAccepted(
+        proposal.getId(),
+        proposal.getGroupId(),
+        acceptedBy,
+        previousStatus,
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published ProposalAccepted event for proposal {}", proposal.getId());
+  }
+
+  private void publishProposalRejectedEvent(SettlementProposal proposal, UUID rejectedBy, String reason) {
+    SettlementEvent.ProposalRejected event = new SettlementEvent.ProposalRejected(
+        proposal.getId(),
+        proposal.getGroupId(),
+        rejectedBy,
+        reason,
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published ProposalRejected event for proposal {}", proposal.getId());
+  }
+
+  private void publishProposalCancelledEvent(SettlementProposal proposal, UUID cancelledBy, String reason) {
+    SettlementEvent.ProposalCancelled event = new SettlementEvent.ProposalCancelled(
+        proposal.getId(),
+        proposal.getGroupId(),
+        cancelledBy,
+        reason,
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published ProposalCancelled event for proposal {}", proposal.getId());
+  }
+
+  private void publishProposalCompletedEvent(SettlementProposal proposal) {
+    SettlementEvent.ProposalCompleted event = new SettlementEvent.ProposalCompleted(
+        proposal.getId(),
+        proposal.getGroupId(),
+        proposal.getTotalAmountCents(),
+        proposal.getCurrency(),
+        proposal.getPayments().size(),
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published ProposalCompleted event for proposal {}", proposal.getId());
+  }
+
+  private void publishPaymentConfirmedEvent(SettlementPayment payment, UUID confirmedBy,
+      String confirmationType, String notes) {
+    SettlementEvent.PaymentConfirmed event = new SettlementEvent.PaymentConfirmed(
+        payment.getId(),
+        payment.getProposal().getId(),
+        payment.getProposal().getGroupId(),
+        payment.getPayerId(),
+        payment.getPayeeId(),
+        confirmedBy,
+        confirmationType,
+        payment.getAmountCents(),
+        payment.getCurrency(),
+        payment.getPaymentMethod(),
+        notes,
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published PaymentConfirmed event for payment {}", payment.getId());
+  }
+
+  private void publishPaymentCompletedEvent(SettlementPayment payment) {
+    SettlementEvent.PaymentCompleted event = new SettlementEvent.PaymentCompleted(
+        payment.getId(),
+        payment.getProposal().getId(),
+        payment.getProposal().getGroupId(),
+        payment.getPayerId(),
+        payment.getPayeeId(),
+        payment.getAmountCents(),
+        payment.getCurrency(),
+        payment.getPaymentMethod(),
+        payment.getPaymentReference(),
+        payment.getCompletedAt());
+
+    eventPublisher.publishEventAsync(event);
+    log.info("Published PaymentCompleted event for payment {} - amount: {} {}",
+        payment.getId(), payment.getAmountDecimal(), payment.getCurrency());
+  }
+
+  private void publishPaymentDisputedEvent(SettlementPayment payment, UUID disputedBy, String reason) {
+    SettlementEvent.PaymentDisputed event = new SettlementEvent.PaymentDisputed(
+        payment.getId(),
+        payment.getProposal().getId(),
+        payment.getProposal().getGroupId(),
+        payment.getPayerId(),
+        payment.getPayeeId(),
+        disputedBy,
+        reason,
+        payment.getAmountCents(),
+        payment.getCurrency(),
+        java.time.ZonedDateTime.now());
+
+    eventPublisher.publishEventAsync(event);
+    log.debug("Published PaymentDisputed event for payment {}", payment.getId());
   }
 }

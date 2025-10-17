@@ -9,6 +9,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import com.expenses.common.event.DomainEvent;
 import com.expenses.common.event.ExpenseEvent;
 import com.expenses.common.event.GroupEvent;
+import com.expenses.common.event.SettlementEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -118,6 +119,37 @@ public class DomainEventDeserializer implements Deserializer<DomainEvent> {
           default -> {
             log.warn("Unknown group event type: {}", eventType);
             return objectMapper.readValue(json, GroupEvent.GroupCreated.class);
+          }
+        }
+      } else if (eventType.startsWith("PROPOSAL_") || eventType.startsWith("PAYMENT_")) {
+        switch (eventType) {
+          case "PROPOSAL_CREATED" -> {
+            return objectMapper.readValue(json, SettlementEvent.ProposalCreated.class);
+          }
+          case "PROPOSAL_ACCEPTED" -> {
+            return objectMapper.readValue(json, SettlementEvent.ProposalAccepted.class);
+          }
+          case "PROPOSAL_REJECTED" -> {
+            return objectMapper.readValue(json, SettlementEvent.ProposalRejected.class);
+          }
+          case "PROPOSAL_CANCELLED" -> {
+            return objectMapper.readValue(json, SettlementEvent.ProposalCancelled.class);
+          }
+          case "PROPOSAL_COMPLETED" -> {
+            return objectMapper.readValue(json, SettlementEvent.ProposalCompleted.class);
+          }
+          case "PAYMENT_CONFIRMED" -> {
+            return objectMapper.readValue(json, SettlementEvent.PaymentConfirmed.class);
+          }
+          case "PAYMENT_COMPLETED" -> {
+            return objectMapper.readValue(json, SettlementEvent.PaymentCompleted.class);
+          }
+          case "PAYMENT_DISPUTED" -> {
+            return objectMapper.readValue(json, SettlementEvent.PaymentDisputed.class);
+          }
+          default -> {
+            log.warn("Unknown settlement event type: {}", eventType);
+            return objectMapper.readValue(json, SettlementEvent.PaymentCompleted.class);
           }
         }
       } else {

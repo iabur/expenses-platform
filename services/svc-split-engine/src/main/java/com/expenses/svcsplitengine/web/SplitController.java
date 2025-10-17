@@ -121,4 +121,40 @@ public class SplitController {
 
     return ResponseEntity.ok(result);
   }
+
+  @PostMapping("/group/{groupId}/reconcile")
+  @Operation(summary = "Reconcile group balances", description = "Validate that group balances sum to zero and check for consistency. Returns validation results.")
+  @ApiResponse(responseCode = "200", description = "Balance reconciliation completed")
+  @ApiResponse(responseCode = "403", description = "Not authorized to reconcile group balances")
+  @ApiResponse(responseCode = "404", description = "Group not found")
+  public ResponseEntity<BalanceReconciliationResult> reconcileGroupBalances(
+      @Parameter(description = "Group ID") @PathVariable UUID groupId,
+      Authentication authentication) {
+
+    log.info("Reconciling balances for group: {}", groupId);
+
+    BalanceReconciliationResult result = balanceUpdateService.reconcileGroupBalances(groupId);
+
+    return ResponseEntity.ok(result);
+  }
+
+  /**
+   * Balance reconciliation result DTO
+   */
+  public record BalanceReconciliationResult(
+      UUID groupId,
+      String currency,
+      boolean isBalanced,
+      Long totalBalanceCents,
+      int userCount,
+      List<UserBalanceInfo> userBalances,
+      String message) {
+
+    public record UserBalanceInfo(
+        UUID userId,
+        Long balanceCents,
+        java.math.BigDecimal balanceDecimal,
+        String balanceType) {
+    }
+  }
 }

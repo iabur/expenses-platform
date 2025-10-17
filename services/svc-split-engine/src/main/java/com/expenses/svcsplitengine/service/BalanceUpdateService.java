@@ -40,7 +40,7 @@ public class BalanceUpdateService {
     Long totalExpenseAmount = splits.stream()
         .mapToLong(ExpenseEvent.SplitInfo::getAmountCents)
         .sum();
-    
+
     log.debug("Total expense amount: {} cents", totalExpenseAmount);
 
     // For each participant, update their balance
@@ -114,6 +114,97 @@ public class BalanceUpdateService {
         payerId, totalAmountCents, groupId);
 
     updateUserBalance(groupId, payerId, currency, totalAmountCents, expenseId);
+  }
+
+  /**
+   * Apply settlement payment to balances
+   * When a settlement payment is completed:
+   * - Payer's balance increases by the payment amount (they paid off debt)
+   * - Payee's balance decreases by the payment amount (they received what they
+   * were owed)
+   * 
+   * Example: If Alice owes Bob $50 and pays him:
+   * - Alice's balance: -50 -> 0 (increase by +50)
+   * - Bob's balance: +50 -> 0 (decrease by -50)
+   */
+  @Transactional
+  public void applySettlementPayment(UUID groupId, UUID payerId, UUID payeeId,
+      Long amountCents, String currency, UUID paymentId) {
+    log.info("Applying settlement payment {} in group {}: {} cents from {} to {}",
+        paymentId, groupId, amountCents, payerId, payeeId);
+
+    // Validate inputs
+    if (amountCents == null || amountCents <= 0) {
+      throw new IllegalArgumentException("Settlement amount must be positive");
+    }
+
+    if (payerId.equals(payeeId)) {
+      throw new IllegalArgumentException("Payer and payee cannot be the same user");
+    }
+
+    // Get current balances
+    GroupBalance payerBalance = groupBalanceRepository
+        .findByGroupIdAndUserIdAndCurrency(groupId, payerId, currency)
+        .orElse(GroupBalance.builder()
+            .groupId(groupId)
+            .userId(payerId)
+            .currency(currency)
+            .balanceCents(0L)
+            .build());
+
+    GroupBalance payeeBalance = groupBalanceRepository
+        .findByGroupIdAndUserIdAndCurrency(groupId, payeeId, currency)
+        .orElse(GroupBalance.builder()
+            .groupId(groupId)
+            .userId(payeeId)
+            .currency(currency)
+            .balanceCents(0L)
+            .build());
+
+    Long payerPreviousBalance = payerBalance.getBalanceCents();
+    Long payeePreviousBalance = payeeBalance.getBalanceCents();
+
+    // Adjust balances
+    // Payer's balance increases (they paid off debt, reducing negative balance or
+    // increasing positive)
+    payerBalance.addToBalance(amountCents);
+    payerBalance.setLastExpenseId(paymentId); // Use paymentId as reference
+
+    // Payee's balance decreases (they received what they were owed, reducing
+    // positive balance or increasing negative)
+    payeeBalance.addToBalance(-amountCents);
+    payeeBalance.setLastExpenseId(paymentId); // Use paymentId as reference
+
+    // Save updated balances
+    GroupBalance savedPayerBalance = groupBalanceRepository.save(payerBalance);
+    GroupBalance savedPayeeBalance = groupBalanceRepository.save(payeeBalance);
+
+    log.info("Successfully applied settlement payment {}: payer {} balance {} -> {}, payee {} balance {} -> {}",
+        paymentId,
+        payerId, payerPreviousBalance, savedPayerBalance.getBalanceCents(),
+        payeeId, payeePreviousBalance, savedPayeeBalance.getBalanceCents());
+
+    // Validate that balances are still consistent
+    validateBalanceConsistency(groupId, currency);
+  }
+
+  /**
+   * Validate that group balances sum to zero
+   */
+  private void validateBalanceConsistency(UUID groupId, String currency) {
+    List<GroupBalance> balances = groupBalanceRepository
+        .findByGroupIdAndCurrencyOrderByBalanceCentsDesc(groupId, currency);
+
+    Long totalBalance = balances.stream()
+        .mapToLong(GroupBalance::getBalanceCents)
+        .sum();
+
+    if (totalBalance != 0) {
+      log.warn("Group {} balances are inconsistent! Total balance: {} cents (should be 0)",
+          groupId, totalBalance);
+    } else {
+      log.debug("Group {} balances are consistent (sum to zero)", groupId);
+    }
   }
 
   /**
@@ -264,7 +355,7 @@ public class BalanceUpdateService {
         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
     // Calculate savings percentage
-    BigDecimal savingsPercentage = originalCount > 0 
+    BigDecimal savingsPercentage = originalCount > 0
         ? BigDecimal.valueOf(100).subtract(
             BigDecimal.valueOf(optimizedCount).multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(originalCount), 2, java.math.RoundingMode.HALF_UP))
@@ -291,5 +382,84 @@ public class BalanceUpdateService {
         .savingsPercentage(savingsPercentage)
         .transactions(transactions)
         .build();
+  }
+
+  /**
+   * Reconcile group balances - validate consistency and return detailed report
+   * This helps identify any balance discrepancies or calculation errors
+   */
+  @Transactional(readOnly = true)
+  public com.expenses.svcsplitengine.web.SplitController.BalanceReconciliationResult reconcileGroupBalances(
+      UUID groupId) {
+    log.info("Reconciling balances for group {}", groupId);
+
+    // Get all balances for the group (assuming USD for now, could be extended to
+    // support multiple currencies)
+    List<GroupBalance> balances = groupBalanceRepository.findByGroupIdOrderByBalanceCentsDesc(groupId);
+
+    if (balances.isEmpty()) {
+      return new com.expenses.svcsplitengine.web.SplitController.BalanceReconciliationResult(
+          groupId,
+          "USD",
+          true,
+          0L,
+          0,
+          List.of(),
+          "No balances found for group - group is balanced by default");
+    }
+
+    String currency = balances.get(0).getCurrency();
+
+    // Calculate total balance
+    Long totalBalanceCents = balances.stream()
+        .mapToLong(GroupBalance::getBalanceCents)
+        .sum();
+
+    boolean isBalanced = totalBalanceCents == 0;
+
+    // Create user balance info list
+    List<com.expenses.svcsplitengine.web.SplitController.BalanceReconciliationResult.UserBalanceInfo> userBalances = balances
+        .stream()
+        .map(balance -> {
+          String balanceType;
+          if (balance.getBalanceCents() > 0) {
+            balanceType = "CREDITOR (should receive money)";
+          } else if (balance.getBalanceCents() < 0) {
+            balanceType = "DEBTOR (owes money)";
+          } else {
+            balanceType = "SETTLED (balance is zero)";
+          }
+
+          return new com.expenses.svcsplitengine.web.SplitController.BalanceReconciliationResult.UserBalanceInfo(
+              balance.getUserId(),
+              balance.getBalanceCents(),
+              balance.getBalanceDecimal(),
+              balanceType);
+        })
+        .toList();
+
+    // Create message
+    String message;
+    if (isBalanced) {
+      message = String.format("✓ Group balances are consistent - total balance is 0 cents across %d users",
+          balances.size());
+    } else {
+      message = String.format(
+          "⚠ Group balances are INCONSISTENT - total balance is %d cents (should be 0) across %d users. " +
+              "This indicates a calculation error or missing transactions.",
+          totalBalanceCents, balances.size());
+    }
+
+    log.info("Balance reconciliation for group {}: isBalanced={}, totalBalance={} cents, userCount={}",
+        groupId, isBalanced, totalBalanceCents, balances.size());
+
+    return new com.expenses.svcsplitengine.web.SplitController.BalanceReconciliationResult(
+        groupId,
+        currency,
+        isBalanced,
+        totalBalanceCents,
+        balances.size(),
+        userBalances,
+        message);
   }
 }

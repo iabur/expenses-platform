@@ -1,13 +1,27 @@
 package com.expenses.svcexpense.entity;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.NotNull;
 
 @Entity
 @Table(name = "expense_participants", uniqueConstraints = @UniqueConstraint(columnNames = { "expense_id", "user_id" }))
@@ -140,5 +154,26 @@ public class ExpenseParticipant {
     PERCENT, // Split by percentage (ruleValue = percentage 0-100)
     SHARES, // Split by shares (ruleValue = number of shares)
     FIXED // Fixed amount (ruleValue = amount in expense currency)
+  }
+
+  /**
+   * JPA lifecycle callback - set timestamps before persisting
+   */
+  @PrePersist
+  protected void onCreate() {
+    if (createdAt == null) {
+      createdAt = ZonedDateTime.now();
+    }
+    if (updatedAt == null) {
+      updatedAt = ZonedDateTime.now();
+    }
+  }
+
+  /**
+   * JPA lifecycle callback - update timestamp before updating
+   */
+  @PreUpdate
+  protected void onUpdate() {
+    updatedAt = ZonedDateTime.now();
   }
 }

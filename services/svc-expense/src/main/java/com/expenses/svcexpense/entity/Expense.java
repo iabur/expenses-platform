@@ -18,6 +18,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -281,5 +283,26 @@ public class Expense {
 
   public boolean isActive() {
     return !isDeleted;
+  }
+
+  /**
+   * JPA lifecycle callback - set timestamps before persisting
+   */
+  @PrePersist
+  protected void onCreate() {
+    if (createdAt == null) {
+      createdAt = ZonedDateTime.now();
+    }
+    if (updatedAt == null) {
+      updatedAt = ZonedDateTime.now();
+    }
+  }
+
+  /**
+   * JPA lifecycle callback - update timestamp before updating
+   */
+  @PreUpdate
+  protected void onUpdate() {
+    updatedAt = ZonedDateTime.now();
   }
 }
